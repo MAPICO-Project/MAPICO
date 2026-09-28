@@ -1,0 +1,13 @@
+{
+  "name": "mafico-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "22.x" },
+  "scripts": { "test": "node --test test/*.test.mjs", "test:schema": "node scripts/validate-schema.mjs" },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "13.1.0",
+    "@electric-sql/pglite": "0.5.8",
+    "yaml": "2.9.1"
+  }
+}
