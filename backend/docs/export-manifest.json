@@ -1,9 +1,0 @@
-{
-  "source": "deliverables/backend",
-  "files": {
-    "openapi.yaml": "1296fb5958259bb029847309dd7af1f1708342c78b5adaf1786c8fc52d683086",
-    "API_DESIGN.md": "d7707406af0f31f12499cfec8b940306ef04fed1d1d63baea2187eb56a245359",
-    "DB_DESIGN.md": "010666590fcfad9ecdc9ebedef677039e79105a98719fe399013dcf1dae18953",
-    "ERD.md": "17d0b2f281430c676643fc955bfd55af5be17bcf5ac7f4fb70cf12bcc7fbb59f"
-  }
-}

@@ -3,6 +3,8 @@
 MAFICO 모노레포의 `backend/` 영역입니다. 저장소: https://github.com/MAFICO-Project/mafico (비공개).
 모바일 웹 우선. 현재 구현은 배포/연결 검증 단계이며 제품 API 전체 구현이 아닙니다.
 
+이 문서는 백엔드 개발·배포 전용입니다. 프로젝트 전체 소개와 파트별 현황은 [루트 README](../README.md)를 확인합니다.
+
 ## 실제 구현
 | 경로 | 동작 |
 |---|---|
@@ -63,6 +65,14 @@ npm run smoke:preview
 npm run seed:validate
 ```
 
+Swagger UI는 `docs/swagger-ui/`에서 실행합니다.
+
+```sh
+cd docs/swagger-ui
+npm run sync:check
+npm start
+```
+
 Node 22. 서버 런타임 외부 의존성 없음. SQL 검증의 Auth/Storage와 `/me` 테스트의 upstream 응답은 스텁/mock이며 실제 Supabase 검증이 아닙니다.
 
 `coverage:contract`는 OpenAPI 50개 operation과 migration의 24개 public 테이블을 직접 읽어 구현·계약 테스트·RLS 증거 상태를 보고합니다. `smoke:preview`는 기본적으로 네트워크를 사용하지 않는 dry-run입니다. 실제 Preview 검증은 사용자가 배포 URL을 확인한 뒤 `MAFICO_SMOKE_TOKEN`을 환경변수로만 제공하고 다음처럼 명시적으로 실행합니다. 토큰과 응답 본문은 출력하지 않습니다.
@@ -84,6 +94,6 @@ Vercel Node Functions, public/ 정적 안내. 일반 API는 `SUPABASE_URL`, `SUP
 Supabase REST가 프로젝트에 응답하는 것은 확인했으나 스키마는 아직 원격 적용하지 않았습니다. 정확한 DB 연결 대상 확인 후 마이그레이션합니다.
 
 ## 구성
-api/ HTTP 핸들러 · lib/ 공통 HTTP/Auth/CORS/Supabase 처리 · test/ 단위 테스트와 계약 fixture · fixtures/ 비실행 개발 seed 계약 · coverage/ 구현 증거 registry · supabase/ migrations/tests · docs/ 계약 스냅샷 · scripts/ 로컬 스키마·coverage·smoke·seed 검증.
+api/ HTTP 핸들러 · lib/ 공통 HTTP/Auth/CORS/Supabase 처리 · test/ 단위 테스트와 계약 fixture · fixtures/ 비실행 개발 seed 계약 · coverage/ 구현 증거 registry · supabase/ migrations/tests · docs/ API·DB·제품 근거와 Swagger · scripts/ 로컬 스키마·coverage·smoke·seed 검증 · worklogs/ 백엔드 작업 기록.
 
 .gitignore의 .env/.vercel/비밀 txt를 유지하세요. Vercel은 모노레포 전체가 아니라 `backend`를 Root Directory로 설정합니다.

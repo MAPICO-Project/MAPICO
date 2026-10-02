@@ -1,5 +1,14 @@
-# 배포용 설계 스냅샷
+# 백엔드 문서
 
-이 폴더는 팀 워크스페이스 deliverables/backend의 버전별 스냅샷입니다. API는 설계 계약이며 실제 구현 여부는 각 operation의 x-implementation-status와 루트 README를 확인하세요.
+이 폴더가 백엔드 계약과 설계의 정본입니다.
 
-독립 저장소에 포함되어 상위 폴더 없이 검증할 수 있습니다. export-manifest.json은 원본과 동일한 SHA-256을 기록합니다. 상위 워크스페이스에서 scripts/sync_backend_docs.mjs로 일괄 갱신합니다. PRD·회의록은 이 코드 저장소에 혼합하지 않습니다.
+- `openapi.yaml`: 제품 HTTP API 계약
+- `API_DESIGN.md`: API 설계와 미결 항목
+- `DB_DESIGN.md`: 데이터·RLS·Storage 설계
+- `ERD.md`: Mermaid ERD
+- `AI_ARCHITECTURE.md`: 분석·추천·따라입기 연동 구조
+- `product/`, `design/`: 백엔드 구현의 근거가 된 제품·유저플로우 자료
+- `swagger-ui/`: 팀 공유용 API 탐색 화면
+- `research/`: 도입 후보 기술 검토
+
+실제 구현 여부는 OpenAPI의 `x-implementation-status`와 상위 `README.md`를 함께 확인합니다.
