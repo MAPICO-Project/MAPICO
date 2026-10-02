@@ -1,0 +1,2477 @@
+# OpenAPI 3.1 — historical M0.5 contract, 2026-09-27; latest PRD reconciliation pending
+"openapi": "3.1.0"
+"info":
+  "title": "마피코 API (이전 M0.5 설계)"
+  "version": "0.2.0"
+  "description": "M0.5 구현용 계약 초안. 서버 구현과 원격 Supabase 배포가 완료되었다는 의미가 아니다. /api/v1 경유. feed/mimic/swap/public OOTD는 후속 범위."
+"servers":
+  - 
+    "url": "/api/v1"
+"security":
+  - 
+    "bearerAuth": []
+"tags":
+  - 
+    "name": "Profile"
+  - 
+    "name": "Catalog"
+  - 
+    "name": "Ingestion"
+  - 
+    "name": "Closet"
+  - 
+    "name": "Weather"
+  - 
+    "name": "Recommendation"
+  - 
+    "name": "OOTD"
+  - 
+    "name": "Internal"
+"paths":
+  "/me":
+    "get":
+      "operationId": "getMe"
+      "tags":
+        - "Profile"
+      "summary": "내 프로필 조회"
+      "responses":
+        "200":
+          "description": "성공"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Profile"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+    "patch":
+      "operationId": "updateMe"
+      "tags":
+        - "Profile"
+      "summary": "프로필 변경"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/ProfilePatch"
+      "responses":
+        "200":
+          "description": "성공"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Profile"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+  "/aesthetics":
+    "get":
+      "operationId": "listAesthetics"
+      "tags":
+        - "Catalog"
+      "summary": "활성 추구미 카탈로그"
+      "responses":
+        "200":
+          "description": "성공"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AestheticList"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "security": []
+  "/tpo-presets":
+    "get":
+      "operationId": "listTpoPresets"
+      "tags":
+        - "Catalog"
+      "summary": "TPO 목록 조회"
+      "responses":
+        "200":
+          "description": "성공"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/TpoList"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "security": []
+  "/me/aesthetics":
+    "put":
+      "operationId": "replaceAestheticPreferences"
+      "tags":
+        - "Profile"
+      "summary": "선호 추구미 1~3개 교체"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/Preferences"
+      "responses":
+        "200":
+          "description": "성공"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Preferences"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+  "/garment-batches":
+    "post":
+      "operationId": "createGarmentBatch"
+      "tags":
+        - "Ingestion"
+      "summary": "서버 경로 생성 및 signed upload 발급"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/IdempotencyKey"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/BatchCreate"
+      "responses":
+        "201":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BatchCreated"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "description": "URL 만료 후에는 upload-url로 재발급. 응답 headers/method를 그대로 Storage에 사용."
+  "/garment-batches/{batchId}":
+    "get":
+      "operationId": "getGarmentBatch"
+      "tags":
+        - "Ingestion"
+      "summary": "배치 상태 조회"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/BatchId"
+      "responses":
+        "200":
+          "description": "성공"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Batch"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+  "/garment-batches/{batchId}/upload-url":
+    "post":
+      "operationId": "refreshUploadUrl"
+      "tags":
+        - "Ingestion"
+      "summary": "업로드 전 signed URL 재발급"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/BatchId"
+      "responses":
+        "200":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/SignedUpload"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "description": "awaiting_upload만 허용. 동일 object key에 upsert false; 업로드된 객체 덮어쓰기 금지."
+  "/garment-batches/{batchId}/complete-upload":
+    "post":
+      "operationId": "completeGarmentUpload"
+      "tags":
+        - "Ingestion"
+      "summary": "실제 객체 검증 후 업로드 완료"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/BatchId"
+        - 
+          "$ref": "#/components/parameters/IdempotencyKey"
+      "responses":
+        "200":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Batch"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "413":
+          "$ref": "#/components/responses/PayloadTooLarge"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+        "503":
+          "$ref": "#/components/responses/Unavailable"
+      "description": "서버가 Storage 존재/크기/MIME/magic bytes 및 디코딩 가능 여부 확인. 이미 uploaded면 재호출 성공."
+  "/garment-batches/{batchId}/analysis-jobs":
+    "post":
+      "operationId": "createAnalysisJob"
+      "tags":
+        - "Ingestion"
+      "summary": "내구성 있는 DB 분석 Job 생성"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/BatchId"
+        - 
+          "$ref": "#/components/parameters/IdempotencyKey"
+      "responses":
+        "202":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalysisJob"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "description": "analysis_jobs 자체가 내구성 있는 DB 큐다. uploaded 배치와 job 생성을 한 트랜잭션으로 처리. 기존 job은409; 실패 재시도는 retry 경로 이용."
+  "/analysis-jobs/{jobId}":
+    "get":
+      "operationId": "getAnalysisJob"
+      "tags":
+        - "Ingestion"
+      "summary": "분석 상태 폴링"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/JobId"
+      "responses":
+        "200":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalysisJob"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "description": "초기 2초, 최대10초 backoff. terminal 상태에서 중단."
+  "/analysis-jobs/{jobId}/retry":
+    "post":
+      "operationId": "retryAnalysisJob"
+      "tags":
+        - "Ingestion"
+      "summary": "실패한 작업 재시도"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/JobId"
+        - 
+          "$ref": "#/components/parameters/IdempotencyKey"
+      "responses":
+        "202":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalysisJob"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "description": "failed이고 retryable, attempt<max_attempts일 때만 허용. 같은 job을 queued로 되돌리고 실제 claim 시 attempt 증가. partial_failed는 재시도 대상이 아니며 성공 draft를 검토/확정하거나 새 배치에서 재촬영한다. confirmed batch는409."
+  "/garment-batches/{batchId}/drafts":
+    "get":
+      "operationId": "listGarmentDrafts"
+      "tags":
+        - "Ingestion"
+      "summary": "검토 결과 조회"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/BatchId"
+      "responses":
+        "200":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/DraftList"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "description": "부분 성공도 반환. draft당 predicted_attributes는 불변, current_attributes는 수정 가능."
+  "/garment-drafts/{draftId}":
+    "patch":
+      "operationId": "updateGarmentDraft"
+      "tags":
+        - "Ingestion"
+      "summary": "예측 원본을 보존하고 draft 수정"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/DraftId"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/DraftPatch"
+      "responses":
+        "200":
+          "description": "성공"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/GarmentDraft"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+  "/garment-batches/{batchId}/confirm":
+    "post":
+      "operationId": "confirmGarmentBatch"
+      "tags":
+        - "Ingestion"
+      "summary": "선택 draft를 원자적으로 옷장 확정"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/BatchId"
+        - 
+          "$ref": "#/components/parameters/IdempotencyKey"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/ConfirmBatch"
+      "responses":
+        "201":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ConfirmResult"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "description": "검토 가능 terminal job만 허용. 모든 소유권/버전 확인, garments 생성과 draft confirmed/batch confirmed를 한 트랜잭션 처리. 선택 안 된 draft는 rejected. 부분 실패 결과 확정하면 해당 batch 재분석 불가."
+  "/garments":
+    "get":
+      "operationId": "listGarments"
+      "tags":
+        - "Closet"
+      "summary": "내 옷장 페이지"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/Cursor"
+        - 
+          "$ref": "#/components/parameters/Limit"
+        - 
+          "name": "category"
+          "in": "query"
+          "schema":
+            "$ref": "#/components/schemas/GarmentCategory"
+      "responses":
+        "200":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/GarmentPage"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "description": "created_at DESC,id DESC. 삭제된 의류 제외."
+  "/garments/{garmentId}":
+    "get":
+      "operationId": "getGarment"
+      "tags":
+        - "Closet"
+      "summary": "의류 상세"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/GarmentId"
+      "responses":
+        "200":
+          "description": "성공"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Garment"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+    "patch":
+      "operationId": "updateGarment"
+      "tags":
+        - "Closet"
+      "summary": "의류 속성 수정"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/GarmentId"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/GarmentPatch"
+      "responses":
+        "200":
+          "description": "성공"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Garment"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+    "delete":
+      "operationId": "deleteGarment"
+      "tags":
+        - "Closet"
+      "summary": "의류 숨김 및 자산 정리 예약"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/GarmentId"
+        - 
+          "$ref": "#/components/parameters/IdempotencyKey"
+      "responses":
+        "202":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/DeleteAccepted"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "description": "추천 후보 즉시 제외. 참조된 동일 원본은 잔여 의류 확인 후 정리. 기존 OOTD 메타데이터 이력 보존, 삭제 이미지 URL 미발급."
+  "/weather/current":
+    "get":
+      "operationId": "getCurrentWeather"
+      "tags":
+        - "Weather"
+      "summary": "단기 예보 중 현재 시간대 날씨"
+      "parameters":
+        - 
+          "name": "lat"
+          "in": "query"
+          "required": true
+          "schema":
+            "type": "number"
+            "minimum": -90
+            "maximum": 90
+        - 
+          "name": "lon"
+          "in": "query"
+          "required": true
+          "schema":
+            "type": "number"
+            "minimum": -180
+            "maximum": 180
+      "responses":
+        "200":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/WeatherSnapshot"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+        "503":
+          "$ref": "#/components/responses/Unavailable"
+      "description": "issued_at=예보 발표 시각, valid_at=대상 시각. 관측값으로 표시하지 않는다. 지원 격자 외422. 위치는 격자로 축약 저장. 유효 캐시가 없고 API 장애면503."
+  "/recommendations":
+    "post":
+      "operationId": "createRecommendation"
+      "tags":
+        - "Recommendation"
+      "summary": "추천 세트 생성"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/IdempotencyKey"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/RecommendationRequest"
+      "responses":
+        "201":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/RecommendationSet"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+        "503":
+          "$ref": "#/components/responses/Unavailable"
+      "description": "tpo 생략 시 profile.default_tpo 적용(없으면 null); 명시 null은 TPO 평가 제외. 1~3개 가능한 조합만 반환; 0개는 insufficient_wardrobe와 shortfall_reasons. LLM 실패는 template fallback. 추구미 미선택422."
+  "/recommendations/{recommendationId}":
+    "get":
+      "operationId": "getRecommendation"
+      "tags":
+        - "Recommendation"
+      "summary": "추천 세트 조회"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/RecommendationId"
+      "responses":
+        "200":
+          "description": "성공"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/RecommendationSet"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+  "/recommendations/{recommendationId}/accept":
+    "post":
+      "operationId": "acceptRecommendation"
+      "tags":
+        - "Recommendation"
+      "summary": "세트 내 한 outfit을 OOTD로 확정"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/RecommendationId"
+        - 
+          "$ref": "#/components/parameters/IdempotencyKey"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/AcceptRecommendation"
+      "responses":
+        "201":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Ootd"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "description": "outfit_id가 이 세트 소속이고 worn_on=세트 target_date인지 확인. 만료/삭제 의류/타인 의류는409. 같은 날짜 동일 outfit은 기존 OOTD를 반환, 다른 outfit이면409. 기존 기록 덮어쓰기 금지."
+  "/ootd":
+    "get":
+      "operationId": "listOotdEntries"
+      "tags":
+        - "OOTD"
+      "summary": "내 캘린더 페이지"
+      "parameters":
+        - 
+          "name": "from"
+          "in": "query"
+          "required": true
+          "schema":
+            "type": "string"
+            "format": "date"
+        - 
+          "name": "to"
+          "in": "query"
+          "required": true
+          "schema":
+            "type": "string"
+            "format": "date"
+        - 
+          "$ref": "#/components/parameters/Cursor"
+        - 
+          "$ref": "#/components/parameters/Limit"
+      "responses":
+        "200":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/OotdPage"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "description": "from/to 포함, from<=to, 최대366일. worn_on DESC,id DESC."
+  "/ootd/{ootdId}":
+    "patch":
+      "operationId": "updateOotdEntry"
+      "tags":
+        - "OOTD"
+      "summary": "착용 만족도와 메모 수정"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/OotdId"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/OotdPatch"
+      "responses":
+        "200":
+          "description": "성공"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Ootd"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+    "delete":
+      "operationId": "deleteOotdEntry"
+      "tags":
+        - "OOTD"
+      "summary": "착용 기록 삭제"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/OotdId"
+        - 
+          "$ref": "#/components/parameters/IdempotencyKey"
+      "responses":
+        "204":
+          "description": "요청 처리 결과"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "description": "삭제 멱등 재호출204. 의류 자체는 삭제하지 않는다."
+  "/internal/analysis-jobs/{jobId}/result":
+    "post":
+      "operationId": "receiveAnalysisResult"
+      "tags":
+        - "Internal"
+      "summary": "Worker terminal 결과 수신"
+      "parameters":
+        - 
+          "$ref": "#/components/parameters/JobId"
+        - 
+          "name": "X-Worker-Timestamp"
+          "in": "header"
+          "required": true
+          "schema":
+            "type": "integer"
+            "minimum": 1
+          "description": "Unix seconds. 서버와 ±300초 이내."
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/AnalysisCallback"
+      "responses":
+        "200":
+          "description": "요청 처리 결과"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/CallbackAccepted"
+          "headers":
+            "X-Request-Id":
+              "schema":
+                "type": "string"
+                "format": "uuid"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/ValidationError"
+        "429":
+          "$ref": "#/components/responses/RateLimited"
+        "500":
+          "$ref": "#/components/responses/InternalError"
+      "security":
+        - 
+          "workerSignature": []
+      "description": "HMAC-SHA256(timestamp+'.'+raw_body), hex signature. 결과 body job은 path에 바인딩된 lease와 검증. event_id unique + payload hash; identical replay returns applied=false. attempt mismatch/terminal overwrite409. 같은 event 다른 payload409. 성공은1~6 items/errors0, partial은1~6 items/errors>=1, failed는items0/errors>=1. 경로 prefix/객체 존재/범위 검사 후 원자 적용. body.job_id=path jobId; lease_token+attempt가 현재 running lease와 일치하고 만료 전이어야 한다. Worker에는 DB service key를 주지 않는다."
+"components":
+  "securitySchemes":
+    "bearerAuth":
+      "type": "http"
+      "scheme": "bearer"
+      "bearerFormat": "Supabase JWT"
+      "description": "서버에서 signature/issuer/audience/expiry 검증. user_id는 sub에서만 취득."
+    "workerSignature":
+      "type": "apiKey"
+      "in": "header"
+      "name": "X-Worker-Signature"
+      "description": "HMAC SHA256(timestamp+'.'+raw body) hex. JWT만으로 내부 callback 접근 불가."
+  "parameters":
+    "BatchId":
+      "name": "batchId"
+      "in": "path"
+      "required": true
+      "schema":
+        "type": "string"
+        "format": "uuid"
+    "JobId":
+      "name": "jobId"
+      "in": "path"
+      "required": true
+      "schema":
+        "type": "string"
+        "format": "uuid"
+    "DraftId":
+      "name": "draftId"
+      "in": "path"
+      "required": true
+      "schema":
+        "type": "string"
+        "format": "uuid"
+    "GarmentId":
+      "name": "garmentId"
+      "in": "path"
+      "required": true
+      "schema":
+        "type": "string"
+        "format": "uuid"
+    "RecommendationId":
+      "name": "recommendationId"
+      "in": "path"
+      "required": true
+      "schema":
+        "type": "string"
+        "format": "uuid"
+    "OotdId":
+      "name": "ootdId"
+      "in": "path"
+      "required": true
+      "schema":
+        "type": "string"
+        "format": "uuid"
+    "IdempotencyKey":
+      "name": "Idempotency-Key"
+      "in": "header"
+      "required": true
+      "schema":
+        "type": "string"
+        "minLength": 8
+        "maxLength": 128
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      "description": "사용자+operation 범위, 24시간 보존. 같은 canonical body는 동일 HTTP status/body 재생; 다른 body는409. 처리 중이면409 REQUEST_IN_PROGRESS."
+    "Cursor":
+      "name": "cursor"
+      "in": "query"
+      "schema":
+        "type": "string"
+        "maxLength": 1024
+      "description": "불투명 keyset 커서. 필터와 정렬 변경 시 재사용 금지."
+    "Limit":
+      "name": "limit"
+      "in": "query"
+      "schema":
+        "type": "integer"
+        "minimum": 1
+        "maximum": 100
+        "default": 20
+  "responses":
+    "BadRequest":
+      "description": "400 JSON 파싱/쿼리 형식 오류"
+      "content":
+        "application/json":
+          "schema":
+            "$ref": "#/components/schemas/ErrorResponse"
+    "Unauthorized":
+      "description": "401 토큰 또는 내부 서명 검증 실패"
+      "content":
+        "application/json":
+          "schema":
+            "$ref": "#/components/schemas/ErrorResponse"
+    "Forbidden":
+      "description": "403 허용되지 않은 작업"
+      "content":
+        "application/json":
+          "schema":
+            "$ref": "#/components/schemas/ErrorResponse"
+    "NotFound":
+      "description": "404 없음 또는 타인 소유. 소유 여부 노출 금지"
+      "content":
+        "application/json":
+          "schema":
+            "$ref": "#/components/schemas/ErrorResponse"
+    "Conflict":
+      "description": "409 상태/버전/멱등 키 충돌"
+      "content":
+        "application/json":
+          "schema":
+            "$ref": "#/components/schemas/ErrorResponse"
+    "PayloadTooLarge":
+      "description": "413 허용 이미지 크기 초과"
+      "content":
+        "application/json":
+          "schema":
+            "$ref": "#/components/schemas/ErrorResponse"
+    "ValidationError":
+      "description": "422 필드/도메인 검증 실패"
+      "content":
+        "application/json":
+          "schema":
+            "$ref": "#/components/schemas/ErrorResponse"
+    "RateLimited":
+      "description": "429 요청 제한"
+      "content":
+        "application/json":
+          "schema":
+            "$ref": "#/components/schemas/ErrorResponse"
+      "headers":
+        "Retry-After":
+          "schema":
+            "type": "integer"
+            "minimum": 1
+          "description": "초 단위 재시도 대기"
+    "Unavailable":
+      "description": "503 날씨/저장소 등 의존 서비스 장애"
+      "content":
+        "application/json":
+          "schema":
+            "$ref": "#/components/schemas/ErrorResponse"
+    "InternalError":
+      "description": "500 내부 오류; 비밀값/스택 노출 금지"
+      "content":
+        "application/json":
+          "schema":
+            "$ref": "#/components/schemas/ErrorResponse"
+  "schemas":
+    "TpoCode":
+      "type": "string"
+      "enum":
+        - "daily_campus"
+        - "office_business"
+        - "date_social"
+        - "formal_event"
+        - "outdoor_active"
+    "GarmentCategory":
+      "type": "string"
+      "enum":
+        - "top"
+        - "bottom"
+        - "outerwear"
+        - "dress"
+        - "shoes"
+        - "accessory"
+        - "other"
+    "JobStatus":
+      "type": "string"
+      "enum":
+        - "queued"
+        - "running"
+        - "succeeded"
+        - "partial_failed"
+        - "failed"
+        - "cancelled"
+    "BatchStatus":
+      "type": "string"
+      "enum":
+        - "awaiting_upload"
+        - "uploaded"
+        - "processing"
+        - "review"
+        - "confirmed"
+        - "failed"
+    "Aesthetic":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "id"
+        - "code"
+        - "display_name"
+        - "active"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "code":
+          "type": "string"
+        "display_name":
+          "type": "string"
+        "active":
+          "type": "boolean"
+    "AestheticPreference":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "aesthetic_id"
+        - "weight"
+      "properties":
+        "aesthetic_id":
+          "type": "string"
+          "format": "uuid"
+        "weight":
+          "type": "number"
+          "exclusiveMinimum": 0
+          "maximum": 1
+    "Preferences":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "preferences"
+      "properties":
+        "preferences":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/AestheticPreference"
+          "minItems": 1
+          "maxItems": 3
+          "description": "aesthetic_id 중복 금지. 가중치 합은 1±0.0001. 활성 카탈로그만 허용."
+      "examples":
+        - 
+          "preferences":
+            - 
+              "aesthetic_id": "11111111-1111-4111-8111-111111111111"
+              "weight": 0.7
+            - 
+              "aesthetic_id": "22222222-2222-4222-8222-222222222222"
+              "weight": 0.3
+    "TpoPreset":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "code"
+        - "display_name"
+        - "description"
+      "properties":
+        "code":
+          "$ref": "#/components/schemas/TpoCode"
+        "display_name":
+          "type": "string"
+        "description":
+          "type": "string"
+          "description": "BFF 정적 카탈로그 문구. DB는 code/label을 관리."
+    "Profile":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "id"
+        - "display_name"
+        - "timezone"
+        - "default_tpo"
+        - "onboarding_completed"
+        - "preferences"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "display_name":
+          "anyOf":
+            - 
+              "type": "string"
+              "maxLength": 50
+            - 
+              "type": "null"
+        "timezone":
+          "type": "string"
+          "examples":
+            - "Asia/Seoul"
+        "default_tpo":
+          "anyOf":
+            - 
+              "$ref": "#/components/schemas/TpoCode"
+            - 
+              "type": "null"
+        "onboarding_completed":
+          "type": "boolean"
+        "preferences":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/AestheticPreference"
+          "maxItems": 3
+    "ProfilePatch":
+      "type": "object"
+      "additionalProperties": false
+      "required": []
+      "properties":
+        "display_name":
+          "anyOf":
+            - 
+              "type": "string"
+              "minLength": 1
+              "maxLength": 50
+            - 
+              "type": "null"
+        "timezone":
+          "type": "string"
+          "description": "유효한 IANA timezone"
+          "examples":
+            - "Asia/Seoul"
+        "default_tpo":
+          "anyOf":
+            - 
+              "$ref": "#/components/schemas/TpoCode"
+            - 
+              "type": "null"
+      "minProperties": 1
+    "BatchCreate":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "content_type"
+        - "file_size"
+      "properties":
+        "content_type":
+          "type": "string"
+          "enum":
+            - "image/jpeg"
+            - "image/png"
+            - "image/webp"
+        "file_size":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 20971520
+      "examples":
+        - 
+          "content_type": "image/jpeg"
+          "file_size": 2097152
+    "SignedUpload":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "url"
+        - "method"
+        - "headers"
+        - "expires_at"
+      "properties":
+        "url":
+          "type": "string"
+          "format": "uri"
+        "method":
+          "type": "string"
+          "const": "PUT"
+        "headers":
+          "type": "object"
+          "additionalProperties":
+            "type": "string"
+          "description": "클라이언트는 지정 헤더를 그대로 전송한다."
+        "expires_at":
+          "type": "string"
+          "format": "date-time"
+    "Batch":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "id"
+        - "status"
+        - "created_at"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "status":
+          "$ref": "#/components/schemas/BatchStatus"
+        "created_at":
+          "type": "string"
+          "format": "date-time"
+    "BatchCreated":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "batch"
+        - "upload"
+        - "object_key"
+      "properties":
+        "batch":
+          "$ref": "#/components/schemas/Batch"
+        "upload":
+          "$ref": "#/components/schemas/SignedUpload"
+        "object_key":
+          "type": "string"
+          "description": "서버 생성 경로. 임의 prefix/덮어쓰기 불가."
+    "AssetRead":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "url"
+        - "expires_at"
+      "properties":
+        "url":
+          "type": "string"
+          "format": "uri"
+        "expires_at":
+          "type": "string"
+          "format": "date-time"
+    "ErrorDetail":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "code"
+        - "message"
+        - "retryable"
+        - "request_id"
+      "properties":
+        "code":
+          "type": "string"
+        "message":
+          "type": "string"
+        "retryable":
+          "type": "boolean"
+        "request_id":
+          "type": "string"
+          "format": "uuid"
+        "details":
+          "type": "object"
+          "additionalProperties": true
+    "ErrorResponse":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "error"
+      "properties":
+        "error":
+          "$ref": "#/components/schemas/ErrorDetail"
+      "examples":
+        - 
+          "error":
+            "code": "VERSION_CONFLICT"
+            "message": "다른 변경이 저장되었습니다. 최신 데이터를 다시 확인해 주세요."
+            "retryable": false
+            "request_id": "11111111-1111-4111-8111-111111111111"
+            "details":
+              "current_version": 3
+    "AnalysisJob":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "id"
+        - "batch_id"
+        - "status"
+        - "attempt"
+        - "max_attempts"
+        - "stage"
+        - "progress"
+        - "retryable"
+        - "error"
+        - "created_at"
+        - "updated_at"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "batch_id":
+          "type": "string"
+          "format": "uuid"
+        "status":
+          "$ref": "#/components/schemas/JobStatus"
+        "attempt":
+          "type": "integer"
+          "minimum": 0
+          "description": "0은 최초 claim 전. Worker claim/reclaim 때 증가."
+        "max_attempts":
+          "type": "integer"
+          "minimum": 1
+        "stage":
+          "anyOf":
+            - 
+              "type": "string"
+              "enum":
+                - "detecting"
+                - "segmenting"
+                - "tagging"
+            - 
+              "type": "null"
+        "progress":
+          "type": "integer"
+          "minimum": 0
+          "maximum": 100
+        "retryable":
+          "type": "boolean"
+        "error":
+          "anyOf":
+            - 
+              "$ref": "#/components/schemas/ErrorDetail"
+            - 
+              "type": "null"
+        "created_at":
+          "type": "string"
+          "format": "date-time"
+        "updated_at":
+          "type": "string"
+          "format": "date-time"
+    "Attributes":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "category"
+      "properties":
+        "category":
+          "$ref": "#/components/schemas/GarmentCategory"
+        "color_hex":
+          "anyOf":
+            - 
+              "type": "string"
+              "pattern": "^#[0-9A-Fa-f]{6}$"
+            - 
+              "type": "null"
+        "pattern":
+          "anyOf":
+            - 
+              "type": "string"
+              "maxLength": 40
+            - 
+              "type": "null"
+        "formality":
+          "anyOf":
+            - 
+              "type": "number"
+              "minimum": 0
+              "maximum": 1
+            - 
+              "type": "null"
+        "activity":
+          "anyOf":
+            - 
+              "type": "number"
+              "minimum": 0
+              "maximum": 1
+            - 
+              "type": "null"
+        "warmth":
+          "anyOf":
+            - 
+              "type": "number"
+              "minimum": 0
+              "maximum": 1
+            - 
+              "type": "null"
+        "aesthetic_scores":
+          "type": "array"
+          "items":
+            "type": "object"
+            "additionalProperties": false
+            "required":
+              - "aesthetic_id"
+              - "score"
+            "properties":
+              "aesthetic_id":
+                "type": "string"
+                "format": "uuid"
+              "score":
+                "type": "number"
+                "minimum": 0
+                "maximum": 1
+          "maxItems": 15
+    "AttributesPatch":
+      "type": "object"
+      "additionalProperties": false
+      "required": []
+      "properties":
+        "category":
+          "$ref": "#/components/schemas/GarmentCategory"
+        "color_hex":
+          "anyOf":
+            - 
+              "type": "string"
+              "pattern": "^#[0-9A-Fa-f]{6}$"
+            - 
+              "type": "null"
+        "pattern":
+          "anyOf":
+            - 
+              "type": "string"
+              "maxLength": 40
+            - 
+              "type": "null"
+        "formality":
+          "anyOf":
+            - 
+              "type": "number"
+              "minimum": 0
+              "maximum": 1
+            - 
+              "type": "null"
+        "activity":
+          "anyOf":
+            - 
+              "type": "number"
+              "minimum": 0
+              "maximum": 1
+            - 
+              "type": "null"
+        "warmth":
+          "anyOf":
+            - 
+              "type": "number"
+              "minimum": 0
+              "maximum": 1
+            - 
+              "type": "null"
+        "aesthetic_scores":
+          "type": "array"
+          "items":
+            "type": "object"
+            "additionalProperties": false
+            "required":
+              - "aesthetic_id"
+              - "score"
+            "properties":
+              "aesthetic_id":
+                "type": "string"
+                "format": "uuid"
+              "score":
+                "type": "number"
+                "minimum": 0
+                "maximum": 1
+          "maxItems": 15
+      "minProperties": 1
+    "GarmentDraft":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "id"
+        - "batch_id"
+        - "client_item_key"
+        - "status"
+        - "predicted_attributes"
+        - "current_attributes"
+        - "prediction_confidence"
+        - "image"
+        - "version"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "batch_id":
+          "type": "string"
+          "format": "uuid"
+        "client_item_key":
+          "type": "string"
+          "description": "BFF가 item_index를 item-0 형식으로 표현. DB의 stable item_index에 대응."
+        "status":
+          "type": "string"
+          "enum":
+            - "predicted"
+            - "edited"
+            - "confirmed"
+            - "rejected"
+        "predicted_attributes":
+          "$ref": "#/components/schemas/Attributes"
+        "current_attributes":
+          "$ref": "#/components/schemas/Attributes"
+        "prediction_confidence":
+          "anyOf":
+            - 
+              "type": "number"
+              "minimum": 0
+              "maximum": 1
+            - 
+              "type": "null"
+        "image":
+          "anyOf":
+            - 
+              "$ref": "#/components/schemas/AssetRead"
+            - 
+              "type": "null"
+        "version":
+          "type": "integer"
+          "minimum": 1
+    "DraftPatch":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "expected_version"
+        - "attributes"
+      "properties":
+        "expected_version":
+          "type": "integer"
+          "minimum": 1
+        "attributes":
+          "$ref": "#/components/schemas/AttributesPatch"
+    "ConfirmBatch":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "draft_ids"
+        - "draft_versions"
+      "properties":
+        "draft_ids":
+          "type": "array"
+          "items":
+            "type": "string"
+            "format": "uuid"
+          "minItems": 1
+          "maxItems": 6
+          "uniqueItems": true
+        "draft_versions":
+          "type": "object"
+          "minProperties": 1
+          "maxProperties": 6
+          "additionalProperties":
+            "type": "integer"
+            "minimum": 1
+          "description": "draft_ids 각각의 UUID를 키로 version을 지정. 키 집합이 정확히 같아야 한다."
+    "Garment":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "id"
+        - "attributes"
+        - "image"
+        - "version"
+        - "created_at"
+        - "updated_at"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "attributes":
+          "$ref": "#/components/schemas/Attributes"
+        "image":
+          "anyOf":
+            - 
+              "$ref": "#/components/schemas/AssetRead"
+            - 
+              "type": "null"
+        "version":
+          "type": "integer"
+          "minimum": 1
+        "created_at":
+          "type": "string"
+          "format": "date-time"
+        "updated_at":
+          "type": "string"
+          "format": "date-time"
+    "GarmentPatch":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "expected_version"
+        - "attributes"
+      "properties":
+        "expected_version":
+          "type": "integer"
+          "minimum": 1
+        "attributes":
+          "$ref": "#/components/schemas/AttributesPatch"
+    "GarmentPage":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "items"
+        - "next_cursor"
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/Garment"
+        "next_cursor":
+          "anyOf":
+            - 
+              "type": "string"
+            - 
+              "type": "null"
+    "DraftList":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "items"
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/GarmentDraft"
+          "maxItems": 6
+    "ConfirmResult":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "batch_id"
+        - "garments"
+      "properties":
+        "batch_id":
+          "type": "string"
+          "format": "uuid"
+        "garments":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/Garment"
+          "minItems": 1
+          "maxItems": 6
+    "DeleteAccepted":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "id"
+        - "status"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "status":
+          "type": "string"
+          "const": "deletion_pending"
+    "Location":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "lat"
+        - "lon"
+      "properties":
+        "lat":
+          "type": "number"
+          "minimum": -90
+          "maximum": 90
+        "lon":
+          "type": "number"
+          "minimum": -180
+          "maximum": 180
+    "WeatherSnapshot":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "id"
+        - "source"
+        - "issued_at"
+        - "valid_at"
+        - "fetched_at"
+        - "grid_x"
+        - "grid_y"
+        - "temperature_c"
+        - "precipitation_type"
+        - "is_stale"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "source":
+          "type": "string"
+          "examples":
+            - "kma_short_term"
+        "issued_at":
+          "type": "string"
+          "format": "date-time"
+        "valid_at":
+          "type": "string"
+          "format": "date-time"
+        "fetched_at":
+          "type": "string"
+          "format": "date-time"
+        "grid_x":
+          "type": "integer"
+        "grid_y":
+          "type": "integer"
+        "temperature_c":
+          "type": "number"
+        "feels_like_c":
+          "anyOf":
+            - 
+              "type": "number"
+            - 
+              "type": "null"
+        "precipitation_probability":
+          "anyOf":
+            - 
+              "type": "number"
+              "minimum": 0
+              "maximum": 100
+            - 
+              "type": "null"
+        "precipitation_type":
+          "type": "string"
+          "enum":
+            - "none"
+            - "rain"
+            - "snow"
+            - "mixed"
+            - "unknown"
+        "humidity":
+          "anyOf":
+            - 
+              "type": "number"
+              "minimum": 0
+              "maximum": 100
+            - 
+              "type": "null"
+        "air_quality":
+          "anyOf":
+            - 
+              "type": "string"
+            - 
+              "type": "null"
+        "is_stale":
+          "type": "boolean"
+    "RecommendationRequest":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "location"
+      "properties":
+        "location":
+          "$ref": "#/components/schemas/Location"
+        "tpo":
+          "anyOf":
+            - 
+              "$ref": "#/components/schemas/TpoCode"
+            - 
+              "type": "null"
+        "requested_count":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 3
+          "default": 3
+      "examples":
+        - 
+          "location":
+            "lat": 37.4501
+            "lon": 127.129
+          "tpo": "daily_campus"
+          "requested_count": 3
+        - 
+          "location":
+            "lat": 37.4501
+            "lon": 127.129
+          "tpo": null
+    "RecommendationScores":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "weather"
+        - "tpo"
+        - "aesthetic"
+        - "harmony"
+      "properties":
+        "weather":
+          "type": "number"
+          "minimum": 0
+          "maximum": 1
+        "tpo":
+          "anyOf":
+            - 
+              "type": "number"
+              "minimum": 0
+              "maximum": 1
+            - 
+              "type": "null"
+        "aesthetic":
+          "type": "number"
+          "minimum": 0
+          "maximum": 1
+        "harmony":
+          "type": "number"
+          "minimum": 0
+          "maximum": 1
+    "Outfit":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "id"
+        - "garment_ids"
+        - "scores"
+        - "reason_facts"
+        - "explanation"
+        - "explanation_source"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "garment_ids":
+          "type": "array"
+          "items":
+            "type": "string"
+            "format": "uuid"
+          "minItems": 1
+          "maxItems": 10
+          "uniqueItems": true
+        "scores":
+          "$ref": "#/components/schemas/RecommendationScores"
+        "reason_facts":
+          "type": "array"
+          "items":
+            "type": "string"
+        "explanation":
+          "anyOf":
+            - 
+              "type": "string"
+              "maxLength": 1000
+            - 
+              "type": "null"
+        "explanation_source":
+          "type": "string"
+          "enum":
+            - "llm"
+            - "template"
+    "RecommendationSet":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "id"
+        - "status"
+        - "requested_count"
+        - "outfits"
+        - "tpo"
+        - "weather"
+        - "engine_version"
+        - "rules_version"
+        - "shortfall_reasons"
+        - "created_at"
+        - "expires_at"
+        - "target_date"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "status":
+          "type": "string"
+          "enum":
+            - "ready"
+            - "insufficient_wardrobe"
+        "requested_count":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 3
+        "outfits":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/Outfit"
+          "maxItems": 3
+        "tpo":
+          "anyOf":
+            - 
+              "$ref": "#/components/schemas/TpoCode"
+            - 
+              "type": "null"
+        "weather":
+          "$ref": "#/components/schemas/WeatherSnapshot"
+        "engine_version":
+          "type": "string"
+        "rules_version":
+          "type": "string"
+        "shortfall_reasons":
+          "type": "array"
+          "items":
+            "type": "string"
+        "created_at":
+          "type": "string"
+          "format": "date-time"
+        "expires_at":
+          "type": "string"
+          "format": "date-time"
+        "target_date":
+          "type": "string"
+          "format": "date"
+          "description": "생성 시 사용자 timezone의 오늘 날짜"
+      "description": "status=ready이면 outfits 1~3, insufficient_wardrobe이면 빈 배열. requested_count 미만이면 shortfall_reasons로 설명한다."
+      "allOf":
+        - 
+          "if":
+            "properties":
+              "status":
+                "const": "ready"
+            "required":
+              - "status"
+          "then":
+            "properties":
+              "outfits":
+                "minItems": 1
+        - 
+          "if":
+            "properties":
+              "status":
+                "const": "insufficient_wardrobe"
+            "required":
+              - "status"
+          "then":
+            "properties":
+              "outfits":
+                "maxItems": 0
+              "shortfall_reasons":
+                "minItems": 1
+    "AcceptRecommendation":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "outfit_id"
+        - "worn_on"
+      "properties":
+        "outfit_id":
+          "type": "string"
+          "format": "uuid"
+        "worn_on":
+          "type": "string"
+          "format": "date"
+      "examples":
+        - 
+          "outfit_id": "11111111-1111-4111-8111-111111111111"
+          "worn_on": "2026-09-27"
+    "Ootd":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "id"
+        - "worn_on"
+        - "garment_ids"
+        - "recommendation_set_id"
+        - "outfit_id"
+        - "note"
+        - "rating"
+        - "visibility"
+        - "version"
+        - "created_at"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "worn_on":
+          "type": "string"
+          "format": "date"
+        "garment_ids":
+          "type": "array"
+          "items":
+            "type": "string"
+            "format": "uuid"
+          "minItems": 1
+          "maxItems": 10
+          "uniqueItems": true
+        "recommendation_set_id":
+          "type": "string"
+          "format": "uuid"
+        "outfit_id":
+          "type": "string"
+          "format": "uuid"
+        "note":
+          "anyOf":
+            - 
+              "type": "string"
+              "maxLength": 1000
+            - 
+              "type": "null"
+        "rating":
+          "anyOf":
+            - 
+              "type": "integer"
+              "minimum": 1
+              "maximum": 5
+            - 
+              "type": "null"
+        "visibility":
+          "type": "string"
+          "const": "private"
+        "version":
+          "type": "integer"
+          "minimum": 1
+        "created_at":
+          "type": "string"
+          "format": "date-time"
+    "OotdPatch":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "expected_version"
+      "properties":
+        "expected_version":
+          "type": "integer"
+          "minimum": 1
+        "note":
+          "anyOf":
+            - 
+              "type": "string"
+              "maxLength": 1000
+            - 
+              "type": "null"
+        "rating":
+          "anyOf":
+            - 
+              "type": "integer"
+              "minimum": 1
+              "maximum": 5
+            - 
+              "type": "null"
+      "minProperties": 2
+    "OotdPage":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "items"
+        - "next_cursor"
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/Ootd"
+        "next_cursor":
+          "anyOf":
+            - 
+              "type": "string"
+            - 
+              "type": "null"
+    "AnalysisResultItem":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "client_item_key"
+        - "bbox"
+        - "mask_object_key"
+        - "attributes"
+        - "confidence"
+        - "item_index"
+      "properties":
+        "client_item_key":
+          "type": "string"
+          "minLength": 1
+          "maxLength": 80
+          "description": "item_index와 일대일 안정 키. 동일 callback 내 중복 금지."
+        "bbox":
+          "type": "array"
+          "items":
+            "type": "number"
+            "minimum": 0
+            "maximum": 1
+          "minItems": 4
+          "maxItems": 4
+          "description": "[x_min,y_min,x_max,y_max], normalized; x_min<x_max,y_min<y_max"
+        "mask_object_key":
+          "type": "string"
+          "minLength": 1
+        "attributes":
+          "$ref": "#/components/schemas/Attributes"
+        "confidence":
+          "anyOf":
+            - 
+              "type": "number"
+              "minimum": 0
+              "maximum": 1
+            - 
+              "type": "null"
+        "item_index":
+          "type": "integer"
+          "minimum": 0
+          "maximum": 5
+    "AnalysisCallback":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "event_id"
+        - "attempt"
+        - "status"
+        - "model_versions"
+        - "items"
+        - "errors"
+        - "job_id"
+        - "lease_token"
+      "properties":
+        "event_id":
+          "type": "string"
+          "format": "uuid"
+        "attempt":
+          "type": "integer"
+          "minimum": 1
+        "status":
+          "type": "string"
+          "enum":
+            - "succeeded"
+            - "partial_failed"
+            - "failed"
+        "model_versions":
+          "type": "object"
+          "minProperties": 1
+          "additionalProperties":
+            "type": "string"
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/AnalysisResultItem"
+          "maxItems": 6
+        "errors":
+          "type": "array"
+          "items":
+            "type": "object"
+            "additionalProperties": false
+            "required":
+              - "code"
+              - "message"
+              - "client_item_key"
+            "properties":
+              "code":
+                "type": "string"
+              "message":
+                "type": "string"
+              "client_item_key":
+                "anyOf":
+                  - 
+                    "type": "string"
+                  - 
+                    "type": "null"
+        "job_id":
+          "type": "string"
+          "format": "uuid"
+        "lease_token":
+          "type": "string"
+          "format": "uuid"
+      "allOf":
+        - 
+          "if":
+            "properties":
+              "status":
+                "const": "succeeded"
+          "then":
+            "properties":
+              "items":
+                "minItems": 1
+              "errors":
+                "maxItems": 0
+        - 
+          "if":
+            "properties":
+              "status":
+                "const": "partial_failed"
+          "then":
+            "properties":
+              "items":
+                "minItems": 1
+              "errors":
+                "minItems": 1
+        - 
+          "if":
+            "properties":
+              "status":
+                "const": "failed"
+          "then":
+            "properties":
+              "items":
+                "maxItems": 0
+              "errors":
+                "minItems": 1
+    "CallbackAccepted":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "job_id"
+        - "event_id"
+        - "applied"
+      "properties":
+        "job_id":
+          "type": "string"
+          "format": "uuid"
+        "event_id":
+          "type": "string"
+          "format": "uuid"
+        "applied":
+          "type": "boolean"
+    "AestheticList":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "items"
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/Aesthetic"
+    "TpoList":
+      "type": "object"
+      "additionalProperties": false
+      "required":
+        - "items"
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/TpoPreset"

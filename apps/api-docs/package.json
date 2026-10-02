@@ -1,0 +1,11 @@
+{
+  "name": "@mafico/api-docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-openapi.mjs",
+    "sync:check": "node scripts/sync-openapi.mjs --check",
+    "start": "node scripts/serve.mjs"
+  }
+}

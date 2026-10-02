@@ -1,5 +1,5 @@
-# 배포용 설계 스냅샷
+# 문서 위치 변경 안내
 
-이 폴더는 팀 워크스페이스 deliverables/backend의 버전별 스냅샷입니다. API는 설계 계약이며 실제 구현 여부는 각 operation의 x-implementation-status와 루트 README를 확인하세요.
+공식 산출물은 `../deliverables/`, 회의·결정은 `../records/`, 작업 기록은 `../worklogs/`에 분리했습니다. 이 폴더에 혼합 문서를 추가하지 마세요.
 
-독립 저장소에 포함되어 상위 폴더 없이 검증할 수 있습니다. export-manifest.json은 원본과 동일한 SHA-256을 기록합니다. 상위 워크스페이스에서 scripts/sync_backend_docs.mjs로 일괄 갱신합니다. PRD·회의록은 이 코드 저장소에 혼합하지 않습니다.
+기존 docs 문서는 삭제하지 않고 `../references/history/`와 `../worklogs/history/`로 이동했습니다. 최신 PRD는 `../deliverables/product/PRD.md`입니다.

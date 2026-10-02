@@ -1,0 +1,6 @@
+{
+  "name": "mafico-design-preview",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": { "test": "node ../../scripts/validate_preview.mjs" }
+}

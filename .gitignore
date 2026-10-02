@@ -1,9 +1,58 @@
+# Secrets and local configuration
 .env
 .env.*
 !.env.example
-.vercel/
-node_modules/
+*api_key*
+*credentials*
 supabase/*.txt
+backend/supabase/*.txt
+api/*.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# JavaScript / frontend
+node_modules/
+.vercel/
+.next/
+dist/
+build/
+coverage/
+!backend/coverage/
+!backend/coverage/implementation.json
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Private or reproducible project assets
+data/**
+!data/**/
+!data/**/.gitkeep
+models/**
+!models/.gitkeep
+artifacts/**
+!artifacts/.gitkeep
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.tflite
+*.joblib
+*.pkl
+
+# Runtime files
+*.log
+*.db
+*.sqlite*
+uploads/
 supabase/.temp/
 supabase/.branches/
-*.log

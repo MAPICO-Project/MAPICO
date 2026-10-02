@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Mafico 백엔드 API 명세" />
+    <title>Mafico API 문서</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.33.1/swagger-ui.css"
+      integrity="sha256-GsMk99zSfkuThrS9ZCEnHsFH6SKiLAW6JLEVFemqYyE="
+      crossorigin="anonymous"
+    />
+    <style>
+      html {
+        box-sizing: border-box;
+        overflow-y: scroll;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: inherit;
+      }
+
+      body {
+        margin: 0;
+        background: #fafafa;
+      }
+
+      .environment-notice {
+        border-bottom: 1px solid #f1c40f;
+        background: #fff8d6;
+        color: #453a00;
+        font: 14px/1.5 system-ui, sans-serif;
+        padding: 10px 20px;
+        text-align: center;
+      }
+
+      .environment-notice code {
+        background: rgb(0 0 0 / 7%);
+        border-radius: 3px;
+        padding: 1px 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <aside class="environment-notice">
+      이 문서는 계약 확인용입니다. <code>Try it out</code>은 문서와 API가 같은 출처이거나
+      API의 CORS와 인증 환경이 준비된 경우에만 사용하세요. 실제 토큰은 공유 화면에 노출하지 마세요.
+    </aside>
+    <div id="swagger-ui"></div>
+    <script
+      src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.33.1/swagger-ui-bundle.js"
+      integrity="sha256-BQvEFe5wSNzYgWgmePcgJk59peNz90YdfFjHVTBSVfc="
+      crossorigin="anonymous"
+    ></script>
+    <script>
+      window.addEventListener("load", () => {
+        SwaggerUIBundle({
+          url: "./openapi.yaml",
+          dom_id: "#swagger-ui",
+          deepLinking: true,
+          displayRequestDuration: true,
+          filter: true,
+          persistAuthorization: false,
+          tryItOutEnabled: false,
+          supportedSubmitMethods: ["get", "post", "put", "patch", "delete"],
+          presets: [SwaggerUIBundle.presets.apis],
+          layout: "BaseLayout"
+        });
+      });
+    </script>
+  </body>
+</html>
