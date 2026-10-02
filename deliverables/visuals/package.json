@@ -1,0 +1,17 @@
+{
+  "name": "@mafico/team-visuals",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "erd": "node generate-erd.mjs",
+    "build": "node build.mjs",
+    "export": "node export-share.mjs",
+    "all": "npm run erd && npm run build && npm run export"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "marked": "16.4.2",
+    "mermaid": "12.0.0"
+  }
+}
