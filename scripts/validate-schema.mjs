@@ -20,7 +20,7 @@ await db.exec(`
   $$select nullif(current_setting('request.jwt.claim.sub', true),'')::uuid$$;
   grant usage on schema public,auth,storage to anon,authenticated,service_role;
   create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
-  create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text);
+  create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text,owner_id uuid,metadata jsonb default '{}',updated_at timestamptz not null default now());
   alter table storage.objects enable row level security;
   grant select on storage.objects to authenticated;
 `);

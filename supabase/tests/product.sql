@@ -43,9 +43,9 @@ select set_config('request.jwt.claim.sub','aaaaaaaa-0000-0000-0000-000000000001'
 do $$ begin
  begin
   perform public.accept_outfit('99999999-0000-0000-0000-000000000009','2026-09-28');
-  raise exception 'manual entry confused with recommendation';
- exception when raise_exception then
-  if sqlerrm<>'ootd_date_conflict' then raise; end if;
+  raise exception 'legacy recommendation accept remained callable';
+ exception when insufficient_privilege then
+  null;
  end;
 end $$;
 reset role;

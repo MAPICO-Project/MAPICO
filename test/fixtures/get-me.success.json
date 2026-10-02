@@ -1,0 +1,18 @@
+{
+  "fixture_id": "fixture-get-me-v1",
+  "operation_id": "getMe",
+  "status": 200,
+  "body": {
+    "id": "22222222-2222-4222-8222-222222222222",
+    "display_name": "마피코 테스트",
+    "timezone": "Asia/Seoul",
+    "default_tpo": null,
+    "onboarding_completed": false,
+    "preferences": [
+      {
+        "aesthetic_id": "33333333-3333-4333-8333-333333333333",
+        "weight": 1
+      }
+    ]
+  }
+}

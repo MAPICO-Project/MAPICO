@@ -4,7 +4,13 @@
   "private": true,
   "type": "module",
   "engines": { "node": "22.x" },
-  "scripts": { "test": "node --test test/*.test.mjs", "test:schema": "node scripts/validate-schema.mjs" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "test:schema": "node scripts/validate-schema.mjs",
+    "coverage:contract": "node scripts/report-coverage.mjs",
+    "smoke:preview": "node scripts/smoke-preview.mjs --dry-run",
+    "seed:validate": "node scripts/validate-dev-seed.mjs"
+  },
   "devDependencies": {
     "@apidevtools/swagger-parser": "13.1.0",
     "@electric-sql/pglite": "0.5.8",

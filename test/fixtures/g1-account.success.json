@@ -1,0 +1,14 @@
+{
+  "fixture_id": "fixture-g1-account-success-v1",
+  "profile": {
+    "id": "22222222-2222-4222-8222-222222222222",
+    "display_name": "Fixture User",
+    "timezone": "Asia/Seoul",
+    "default_tpo": null,
+    "onboarding_completed": true,
+    "preferences": [
+      { "aesthetic_id": "33333333-3333-4333-8333-333333333333", "weight": 1 }
+    ]
+  },
+  "onboarding": { "knows_aesthetic": null, "tutorial_seen": true, "completed": true }
+}

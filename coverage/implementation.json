@@ -1,0 +1,253 @@
+{
+  "version": 1,
+  "operations": {
+    "getMe": {
+      "status": "implemented-local",
+      "contract_test": "test/me.test.mjs",
+      "tables": ["profiles", "user_aesthetic_preferences"],
+      "rls_test": "supabase/tests/security.sql"
+    },
+    "updateMe": {
+      "status": "implemented-local",
+      "contract_test": "test/account.test.mjs",
+      "tables": ["profiles", "user_aesthetic_preferences"],
+      "rls_test": "supabase/tests/account_writes.sql"
+    },
+    "replaceAestheticPreferences": {
+      "status": "implemented-local",
+      "contract_test": "test/account.test.mjs",
+      "tables": ["profiles", "aesthetics", "user_aesthetic_preferences"],
+      "rls_test": "supabase/tests/account_writes.sql"
+    },
+    "saveOnboardingState": {
+      "status": "implemented-local",
+      "contract_test": "test/account.test.mjs",
+      "tables": ["profiles"],
+      "rls_test": "supabase/tests/account_writes.sql"
+    },
+    "listAesthetics": {
+      "status": "implemented-local",
+      "contract_test": "test/catalog.test.mjs",
+      "tables": ["aesthetics"],
+      "rls_test": "supabase/tests/security.sql"
+    },
+    "listTpoPresets": {
+      "status": "implemented-local",
+      "contract_test": "test/catalog.test.mjs",
+      "tables": ["tpo_presets"],
+      "rls_test": "supabase/tests/security.sql"
+    },
+    "listGarments": {
+      "status": "implemented-local",
+      "contract_test": "test/garments.test.mjs",
+      "tables": ["garments", "garment_assets"],
+      "rls_test": "supabase/tests/garment_writes.sql"
+    },
+    "getGarment": {
+      "status": "implemented-local",
+      "contract_test": "test/garments.test.mjs",
+      "tables": ["garments", "garment_assets"],
+      "rls_test": "supabase/tests/garment_writes.sql"
+    },
+    "updateGarment": {
+      "status": "implemented-local",
+      "contract_test": "test/garments.test.mjs",
+      "tables": ["garments"],
+      "rls_test": "supabase/tests/garment_writes.sql"
+    },
+    "deleteGarment": {
+      "status": "implemented-local",
+      "contract_test": "test/garments.test.mjs",
+      "tables": ["garment_batches", "garment_assets", "garments", "idempotency_keys"],
+      "rls_test": "supabase/tests/garment_writes.sql"
+    },
+    "createGarmentBatch": {
+      "status": "implemented-local",
+      "contract_test": "test/garment-batches.test.mjs",
+      "tables": ["garment_batches", "garment_assets", "idempotency_keys"],
+      "rls_test": "supabase/tests/ingestion.sql"
+    },
+    "getGarmentBatch": {
+      "status": "implemented-local",
+      "contract_test": "test/garment-batches.test.mjs",
+      "tables": ["garment_batches"],
+      "rls_test": "supabase/tests/ingestion.sql"
+    },
+    "refreshUploadUrl": {
+      "status": "implemented-local",
+      "contract_test": "test/garment-batches.test.mjs",
+      "tables": ["garment_batches", "garment_assets"],
+      "rls_test": "supabase/tests/ingestion.sql"
+    },
+    "completeGarmentUpload": {
+      "status": "implemented-local",
+      "contract_test": "test/garment-batches.test.mjs",
+      "tables": ["garment_batches", "garment_assets", "idempotency_keys"],
+      "rls_test": "supabase/tests/ingestion.sql"
+    },
+    "createAnalysisJob": {
+      "status": "implemented-local",
+      "contract_test": "test/analysis.test.mjs",
+      "tables": ["garment_batches", "garment_assets", "analysis_jobs", "idempotency_keys"],
+      "rls_test": "supabase/tests/analysis.sql"
+    },
+    "getAnalysisJob": {
+      "status": "implemented-local",
+      "contract_test": "test/analysis.test.mjs",
+      "tables": ["analysis_jobs"],
+      "rls_test": "supabase/tests/analysis.sql"
+    },
+    "retryAnalysisJob": {
+      "status": "implemented-local",
+      "contract_test": "test/analysis.test.mjs",
+      "tables": ["garment_batches", "analysis_jobs", "idempotency_keys"],
+      "rls_test": "supabase/tests/analysis.sql"
+    },
+    "listGarmentDrafts": {
+      "status": "implemented-local",
+      "contract_test": "test/analysis.test.mjs",
+      "tables": ["garment_batches", "garment_assets", "garment_drafts"],
+      "rls_test": "supabase/tests/analysis.sql"
+    },
+    "updateGarmentDraft": {
+      "status": "implemented-local",
+      "contract_test": "test/analysis.test.mjs",
+      "tables": ["garment_batches", "garment_drafts"],
+      "rls_test": "supabase/tests/analysis.sql"
+    },
+    "confirmGarmentBatch": {
+      "status": "implemented-local",
+      "contract_test": "test/analysis.test.mjs",
+      "tables": ["garment_batches", "garment_assets", "analysis_jobs", "garment_drafts", "garments", "idempotency_keys"],
+      "rls_test": "supabase/tests/analysis.sql"
+    },
+    "receiveAnalysisResult": {
+      "status": "implemented-local",
+      "contract_test": "test/analysis-callback.test.mjs",
+      "tables": ["garment_batches", "garment_assets", "analysis_jobs", "garment_drafts", "idempotency_keys"],
+      "rls_test": "supabase/tests/analysis.sql"
+    },
+    "getCurrentWeather": {
+      "status": "implemented-local",
+      "contract_test": "test/weather.test.mjs",
+      "tables": ["weather_snapshots"],
+      "rls_test": "supabase/tests/recommendations.sql"
+    },
+    "createRecommendation": {
+      "status": "implemented-local",
+      "contract_test": "test/recommendations.test.mjs",
+      "tables": ["weather_snapshots", "recommendation_requests", "outfit_recommendations", "outfit_items", "garments", "garment_assets", "idempotency_keys"],
+      "rls_test": "supabase/tests/recommendations.sql"
+    },
+    "getRecommendation": {
+      "status": "implemented-local",
+      "contract_test": "test/recommendations.test.mjs",
+      "tables": ["weather_snapshots", "recommendation_requests", "outfit_recommendations", "outfit_items"],
+      "rls_test": "supabase/tests/recommendations.sql"
+    },
+    "acceptRecommendation": {
+      "status": "implemented-local",
+      "contract_test": "test/recommendations.test.mjs",
+      "tables": ["recommendation_requests", "outfit_recommendations", "outfit_items", "garments", "garment_assets", "ootd_entries", "idempotency_keys"],
+      "rls_test": "supabase/tests/recommendations.sql"
+    },
+    "listOotdEntries": {
+      "status": "implemented-local", "contract_test": "test/outfits.test.mjs",
+      "tables": ["ootd_entries", "garments"], "rls_test": "supabase/tests/outfits_ootd.sql"
+    },
+    "createManualOotd": {
+      "status": "implemented-local", "contract_test": "test/outfits.test.mjs",
+      "tables": ["ootd_entries", "garments", "saved_outfits", "outfit_recommendations", "weather_snapshots", "idempotency_keys"], "rls_test": "supabase/tests/outfits_ootd.sql"
+    },
+    "getOotd": {
+      "status": "implemented-local", "contract_test": "test/outfits.test.mjs",
+      "tables": ["ootd_entries", "garments"], "rls_test": "supabase/tests/outfits_ootd.sql"
+    },
+    "updateOotdEntry": {
+      "status": "implemented-local", "contract_test": "test/outfits.test.mjs",
+      "tables": ["ootd_entries", "garments", "saved_outfits", "outfit_recommendations", "weather_snapshots"], "rls_test": "supabase/tests/outfits_ootd.sql"
+    },
+    "deleteOotdEntry": {
+      "status": "implemented-local", "contract_test": "test/outfits.test.mjs",
+      "tables": ["ootd_entries", "feed_posts", "idempotency_keys"], "rls_test": "supabase/tests/outfits_ootd.sql"
+    },
+    "listSavedOutfits": {
+      "status": "implemented-local", "contract_test": "test/outfits.test.mjs",
+      "tables": ["saved_outfits", "saved_outfit_items", "garments"], "rls_test": "supabase/tests/outfits_ootd.sql"
+    },
+    "createSavedOutfit": {
+      "status": "implemented-local", "contract_test": "test/outfits.test.mjs",
+      "tables": ["saved_outfits", "saved_outfit_items", "garments", "outfit_recommendations", "idempotency_keys"], "rls_test": "supabase/tests/outfits_ootd.sql"
+    },
+    "getSavedOutfit": {
+      "status": "implemented-local", "contract_test": "test/outfits.test.mjs",
+      "tables": ["saved_outfits", "saved_outfit_items", "garments"], "rls_test": "supabase/tests/outfits_ootd.sql"
+    },
+    "updateSavedOutfit": {
+      "status": "implemented-local", "contract_test": "test/outfits.test.mjs",
+      "tables": ["saved_outfits", "saved_outfit_items", "garments", "outfit_recommendations"], "rls_test": "supabase/tests/outfits_ootd.sql"
+    },
+    "deleteSavedOutfit": {
+      "status": "implemented-local", "contract_test": "test/outfits.test.mjs",
+      "tables": ["saved_outfits", "saved_outfit_items", "ootd_entries"], "rls_test": "supabase/tests/outfits_ootd.sql"
+    },
+    "getClosetStatistics": {
+      "status": "implemented-local", "contract_test": "test/outfits.test.mjs",
+      "tables": ["garments", "ootd_entries"], "rls_test": "supabase/tests/outfits_ootd.sql"
+    },
+    "listFeed": {
+      "status": "implemented-local", "contract_test": "test/feed.test.mjs",
+      "tables": ["feed_posts", "feed_media", "post_likes", "profiles"], "rls_test": "supabase/tests/feed.sql"
+    },
+    "createFeedPost": {
+      "status": "implemented-local", "contract_test": "test/feed.test.mjs",
+      "tables": ["feed_posts", "ootd_entries", "aesthetics", "idempotency_keys"], "rls_test": "supabase/tests/feed.sql"
+    },
+    "getFeedPost": {
+      "status": "implemented-local", "contract_test": "test/feed.test.mjs",
+      "tables": ["feed_posts", "feed_media", "post_likes", "profiles"], "rls_test": "supabase/tests/feed.sql"
+    },
+    "updateFeedPost": {
+      "status": "implemented-local", "contract_test": "test/feed.test.mjs",
+      "tables": ["feed_posts", "feed_media", "aesthetics"], "rls_test": "supabase/tests/feed.sql"
+    },
+    "deleteFeedPost": {
+      "status": "implemented-local", "contract_test": "test/feed.test.mjs",
+      "tables": ["feed_posts", "feed_media"], "rls_test": "supabase/tests/feed.sql"
+    },
+    "createFeedMediaUpload": {
+      "status": "implemented-local", "contract_test": "test/feed.test.mjs",
+      "tables": ["feed_posts", "feed_media", "idempotency_keys"], "rls_test": "supabase/tests/feed.sql"
+    },
+    "completeFeedMedia": {
+      "status": "implemented-local", "contract_test": "test/feed.test.mjs",
+      "tables": ["feed_posts", "feed_media", "idempotency_keys"], "rls_test": "supabase/tests/feed.sql"
+    },
+    "likeFeedPost": {
+      "status": "implemented-local", "contract_test": "test/feed.test.mjs",
+      "tables": ["feed_posts", "post_likes"], "rls_test": "supabase/tests/feed.sql"
+    },
+    "unlikeFeedPost": {
+      "status": "implemented-local", "contract_test": "test/feed.test.mjs",
+      "tables": ["post_likes"], "rls_test": "supabase/tests/feed.sql"
+    },
+    "listLikedPosts": {
+      "status": "implemented-local", "contract_test": "test/feed.test.mjs",
+      "tables": ["feed_posts", "feed_media", "post_likes", "profiles"], "rls_test": "supabase/tests/feed.sql"
+    },
+    "listMyPosts": {
+      "status": "implemented-local", "contract_test": "test/feed.test.mjs",
+      "tables": ["feed_posts", "feed_media", "post_likes", "profiles"], "rls_test": "supabase/tests/feed.sql"
+    },
+    "createMimicJob": {
+      "status": "implemented-local", "contract_test": "test/mimic.test.mjs",
+      "tables": ["mimic_requests", "mimic_source_items", "mimic_candidate_items", "feed_posts", "feed_media", "garments", "garment_assets", "idempotency_keys"],
+      "rls_test": "supabase/tests/mimic.sql"
+    },
+    "getMimicJob": {
+      "status": "implemented-local", "contract_test": "test/mimic.test.mjs",
+      "tables": ["mimic_requests", "mimic_source_items", "mimic_candidate_items", "feed_posts", "garments", "garment_assets"],
+      "rls_test": "supabase/tests/mimic.sql"
+    }
+  }
+}

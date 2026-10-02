@@ -1,10 +1,10 @@
-# OpenAPI 3.1 YAML (JSON-compatible syntax). Planned contract; not live routes.
+# OpenAPI 3.1 YAML (JSON-compatible syntax). Implementation-tracked contract; hosted integration status is explicit.
 {
   "openapi": "3.1.0",
   "info": {
-  "title": "마피코(MyFit:Core) API — 최신 PRD 설계",
+    "title": "마피코(MyFit:Core) API — 최신 PRD 설계",
     "version": "0.3.0",
-    "description": "2026-09-28 PRD 기준 계획된 계약. 실제 제품 API 미구현. 기존 v0.2를 확장하며 saved outfits, manual OOTD, feed, likes, mimic 포함. TPO/스케줄/하루 OOTD 정책은 미확정."
+    "description": "2026-09-28 PRD 기준 계약. G1~G8의 49개 operation은 로컬 구현·검증됐고 requestAccountDeletion 1개만 계획 상태다. hosted Supabase Auth/Storage, 실제 worker와 배포 통합은 미검증이다."
   },
   "servers": [
     {
@@ -104,9 +104,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-implementation-status": "planned"
+        "description": "GET/HEAD와 PATCH 로컬 구현. Supabase Auth /user 검증 후 사용자 JWT와 RLS로 본인 프로필을 조회한다. DELETE와 hosted Supabase 통합은 미구현·미검증.",
+        "x-implementation-status": "implemented-local"
       },
       "patch": {
         "operationId": "updateMe",
@@ -163,9 +167,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local",
+        "description": "표시명·시간대를 strict body allowlist로 검증하고 사용자 JWT로 narrow RPC를 호출한 뒤 같은 JWT/RLS로 Profile을 재조회한다. avatar_asset_id는 Storage 계약 전까지 422 UNSUPPORTED_FIELD다. hosted 검증은 미완료."
       },
       "delete": {
         "operationId": "requestAccountDeletion",
@@ -205,6 +213,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -261,10 +272,14 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "security": [],
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local",
+        "description": "publishable key로 활성 catalog를 익명 조회하고 공개 필드만 투영한다. 로컬 mock 검증만 완료됐으며 hosted 검증은 미완료."
       }
     },
     "/tpo-presets": {
@@ -313,12 +328,15 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "security": [],
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "deprecated": true,
-        "description": "이전 계약 호환 후보. 최신 홈에 TPO 칩 없음. 활성 제품 사용은 팀 결정 후."
+        "description": "이전 계약 호환용 읽기 handler. publishable key로 활성 catalog를 익명 조회하고 알려진 5개 code의 정적 설명만 결합한다. 최신 홈의 활성 제품 사용 여부와 hosted 검증은 미확정."
       }
     },
     "/me/aesthetics": {
@@ -377,9 +395,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local",
+        "description": "활성 항목 1~3개, 대소문자 무관 ID 중복 금지, 가중치 합 1±0.0001을 로컬 검증하고 사용자 JWT로 원자 교체 RPC를 호출한 뒤 같은 JWT/RLS로 재조회한다. hosted 검증은 미완료."
       }
     },
     "/garment-batches": {
@@ -446,10 +468,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
-        "description": "URL 만료 후에는 upload-url로 재발급. 응답 headers/method를 그대로 Storage에 사용.",
-        "x-implementation-status": "planned"
+        "description": "??? JWT? ?? RPC? batch/source asset/object key? ?? ????, ??? ?? source ???? non-upsert signed upload URL? ????. URL/token? idempotency ???? ?? ???.",
+        "x-implementation-status": "implemented-local"
       }
     },
     "/garment-batches/{batchId}": {
@@ -503,9 +528,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local",
+        "description": "??? JWT/RLS? ?? ??? ?? ?? ??? ????. ? ??? ??? 404? ????."
       }
     },
     "/garment-batches/{batchId}/upload-url": {
@@ -559,10 +588,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
-        "description": "awaiting_upload만 허용. 동일 object key에 upsert false; 업로드된 객체 덮어쓰기 금지.",
-        "x-implementation-status": "planned"
+        "description": "awaiting_upload ???? ??? ?? ?? ?? source asset?? non-upsert signed URL? ?????.",
+        "x-implementation-status": "implemented-local"
       }
     },
     "/garment-batches/{batchId}/complete-upload": {
@@ -627,8 +659,8 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "description": "서버가 Storage 존재/크기/MIME/magic bytes 및 디코딩 가능 여부 확인. 이미 uploaded면 재호출 성공.",
-        "x-implementation-status": "planned"
+        "description": "Storage ranged GET? MIME????magic bytes? ???? RPC? storage.objects owner?size?MIME? ???? ? uploaded? ????. ?? ??? ??? ??? ???? invalid object? failed? ????. hosted Storage ??? ?????.",
+        "x-implementation-status": "implemented-local"
       }
     },
     "/garment-batches/{batchId}/analysis-jobs": {
@@ -685,10 +717,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "description": "analysis_jobs 자체가 내구성 있는 DB 큐다. uploaded 배치와 job 생성을 한 트랜잭션으로 처리. 기존 job은409; 실패 재시도는 retry 경로 이용.",
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local"
       }
     },
     "/analysis-jobs/{jobId}": {
@@ -742,10 +777,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "description": "초기 2초, 최대10초 backoff. terminal 상태에서 중단.",
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local"
       }
     },
     "/analysis-jobs/{jobId}/retry": {
@@ -802,10 +840,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "description": "failed이고 retryable, attempt<max_attempts일 때만 허용. 같은 job을 queued로 되돌리고 실제 claim 시 attempt 증가. partial_failed는 재시도 대상이 아니며 성공 draft를 검토/확정하거나 새 배치에서 재촬영한다. confirmed batch는409.",
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local"
       }
     },
     "/garment-batches/{batchId}/drafts": {
@@ -859,10 +900,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "description": "원본 예측은 내부 보존. UI DTO에는 카테고리·하위분류·비고만 노출. 색상/추구미 편집 제외.",
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local"
       }
     },
     "/garment-drafts/{draftId}": {
@@ -926,9 +970,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local"
       }
     },
     "/garment-batches/{batchId}/confirm": {
@@ -995,10 +1042,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "description": "검토 가능 terminal job만 허용. 모든 소유권/버전 확인, garments 생성과 draft confirmed/batch confirmed를 한 트랜잭션 처리. 선택 안 된 draft는 rejected. 부분 실패 결과 확정하면 해당 batch 재분석 불가.",
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local"
       }
     },
     "/garments": {
@@ -1062,10 +1112,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
-        "description": "created_at DESC,id DESC. 삭제된 의류 제외.",
-        "x-implementation-status": "planned"
+        "description": "created_at DESC,id DESC keyset cursor. 삭제된 의류를 제외하고 사용자 JWT/RLS로 조회하며 검증된 asset만 5분 signed URL로 투영한다. 로컬 mock/SQL 검증 완료, hosted Storage는 미검증.",
+        "x-implementation-status": "implemented-local"
       }
     },
     "/garments/{garmentId}": {
@@ -1119,9 +1172,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local",
+        "description": "본인 활성 의류와 검증된 cutout/source asset만 조회하고 사용자 JWT로 signed URL을 발급한다. 로컬 mock 검증 완료, hosted Storage는 미검증."
       },
       "patch": {
         "operationId": "updateGarment",
@@ -1183,9 +1240,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local",
+        "description": "expected_version과 category/subcategory/note allowlist를 검증하고 본인 고정 narrow RPC 뒤 같은 JWT/RLS로 재조회한다."
       },
       "delete": {
         "operationId": "deleteGarment",
@@ -1240,10 +1301,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
-        "description": "추천 후보 즉시 제외. 참조된 동일 원본은 잔여 의류 확인 후 정리. 기존 OOTD 메타데이터 이력 보존, 삭제 이미지 URL 미발급.",
-        "x-implementation-status": "planned"
+        "description": "Idempotency-Key를 SQL에서 재검증하고 202 replay를 저장한다. soft delete로 즉시 옷장 조회에서 제외하며 orphan asset에는 cleanup marker만 남겨 DB 이력을 보존한다. 실제 Storage 객체 삭제 worker는 미구현.",
+        "x-implementation-status": "implemented-local"
       }
     },
     "/weather/current": {
@@ -1320,7 +1384,7 @@
           }
         },
         "description": "issued_at=예보 발표 시각, valid_at=대상 시각. 관측값으로 표시하지 않는다. 지원 격자 외422. 위치는 격자로 축약 저장. 유효 캐시가 없고 API 장애면503.",
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local"
       }
     },
     "/recommendations": {
@@ -1389,8 +1453,8 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "description": "날씨·선택 추구미로 0~3개 생성. TPO는 미결이며 본 계약 제안에서는 생략/null, 자동 기본값 없음.",
-        "x-implementation-status": "planned"
+        "description": "현재 시간대 날씨와 사용자의 저장된 추구미 가중치를 사용하는 deterministic rule engine으로 0~3개를 생성한다. 설명은 서버가 검증된 fact로 렌더링한 template만 사용한다. TPO는 생략/null만 허용한다. provider 전에 2분 reservation lease로 idempotency를 선점한다.",
+        "x-implementation-status": "implemented-local"
       }
     },
     "/recommendations/{recommendationId}": {
@@ -1444,9 +1508,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local"
       }
     },
     "/recommendations/{recommendationId}/accept": {
@@ -1513,10 +1580,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "description": "outfit_id가 이 세트 소속이고 worn_on=세트 target_date인지 확인. 만료/삭제 의류/타인 의류는409. 같은 날짜 동일 outfit은 기존 OOTD를 반환, 다른 outfit이면409. 기존 기록 덮어쓰기 금지.",
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local"
       }
     },
     "/ootd": {
@@ -1591,10 +1661,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "description": "from/to 포함, from<=to, 최대366일. worn_on DESC,id DESC.",
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local"
       },
       "post": {
         "operationId": "createManualOotd",
@@ -1602,7 +1675,7 @@
           "OOTD"
         ],
         "summary": "수동·보관·추천 코디로 날짜 기록",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "201": {
             "description": "계획된 성공 응답",
@@ -1610,6 +1683,14 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Ootd"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
@@ -1634,6 +1715,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "requestBody": {
@@ -1715,9 +1799,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "description": "날짜·구성·메모·평가·계획상태 수정. 버전 확인. 원본 보관 코디나 이미 공유한 post에 자동 반영하지 않음."
       },
       "delete": {
@@ -1758,10 +1845,13 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "description": "삭제 멱등 재호출204. 의류 자체는 삭제하지 않는다.",
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local"
       },
       "get": {
         "operationId": "getOotd",
@@ -1769,7 +1859,7 @@
           "OOTD"
         ],
         "summary": "착용 기록 상세",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "200": {
             "description": "계획된 성공 응답",
@@ -1801,6 +1891,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -1887,6 +1980,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "security": [
@@ -1895,7 +1991,7 @@
           }
         ],
         "description": "HMAC-SHA256(timestamp+'.'+raw_body), hex signature. 결과 body job은 path에 바인딩된 lease와 검증. event_id unique + payload hash; identical replay returns applied=false. attempt mismatch/terminal overwrite409. 같은 event 다른 payload409. 성공은1~6 items/errors0, partial은1~6 items/errors>=1, failed는items0/errors>=1. 경로 prefix/객체 존재/범위 검사 후 원자 적용. body.job_id=path jobId; lease_token+attempt가 현재 running lease와 일치하고 만료 전이어야 한다. Worker에는 DB service key를 주지 않는다.",
-        "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local"
       }
     },
     "/saved-outfits": {
@@ -1905,7 +2001,7 @@
           "Saved outfits"
         ],
         "summary": "날짜 없는 코디 보관함",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "200": {
             "description": "계획된 성공 응답",
@@ -1937,6 +2033,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -1954,7 +2053,7 @@
           "Saved outfits"
         ],
         "summary": "코디 조합 보관",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "201": {
             "description": "계획된 성공 응답",
@@ -1986,6 +2085,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "requestBody": {
@@ -2013,7 +2115,7 @@
           "Saved outfits"
         ],
         "summary": "보관 코디 조회",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "200": {
             "description": "계획된 성공 응답",
@@ -2045,6 +2147,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -2065,7 +2170,7 @@
           "Saved outfits"
         ],
         "summary": "보관 코디 수정",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "200": {
             "description": "계획된 성공 응답",
@@ -2097,6 +2202,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "requestBody": {
@@ -2127,7 +2235,7 @@
           "Saved outfits"
         ],
         "summary": "보관 코디 삭제",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "204": {
             "description": "계획된 성공 응답"
@@ -2152,6 +2260,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -2175,7 +2286,7 @@
           "Statistics"
         ],
         "summary": "실제 착용 기준 통계",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "200": {
             "description": "계획된 성공 응답",
@@ -2207,6 +2318,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "description": "wear_status=worn만 집계. planned/unconfirmed 제외. 신규 30일 미만 의류는 등록일 이후 미착용으로 별도 해석."
@@ -2219,7 +2333,7 @@
           "Onboarding"
         ],
         "summary": "선택 분기와 튜토리얼 상태",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "200": {
             "description": "계획된 성공 응답",
@@ -2227,6 +2341,14 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OnboardingState"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
@@ -2251,6 +2373,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "requestBody": {
@@ -2263,7 +2388,7 @@
             }
           }
         },
-        "description": "API 계획. 저장 DB 필드/완료 평가 로직 추가 구현 필요."
+        "description": "세 필드를 strict body allowlist로 검증하고 사용자 JWT로 narrow RPC를 호출한 뒤 같은 JWT/RLS로 재조회한다. completed 추가 선행조건은 제품 미결이므로 임의 적용하지 않았고 hosted 검증은 미완료."
       }
     },
     "/feed": {
@@ -2273,7 +2398,7 @@
           "Feed"
         ],
         "summary": "공개 피드 탐색",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "200": {
             "description": "계획된 성공 응답",
@@ -2305,6 +2430,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -2363,7 +2491,7 @@
           "Feed"
         ],
         "summary": "공유 게시물 작성",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "201": {
             "description": "계획된 성공 응답",
@@ -2395,6 +2523,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "requestBody": {
@@ -2421,7 +2552,7 @@
           "Feed"
         ],
         "summary": "공유 게시물 상세",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "200": {
             "description": "계획된 성공 응답",
@@ -2453,6 +2584,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -2474,7 +2608,7 @@
           "Feed"
         ],
         "summary": "작성자 게시물 수정·공개전환",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "200": {
             "description": "계획된 성공 응답",
@@ -2506,6 +2640,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "requestBody": {
@@ -2537,7 +2674,7 @@
           "Feed"
         ],
         "summary": "게시물 철회",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "202": {
             "description": "계획된 성공 응답",
@@ -2569,6 +2706,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -2592,7 +2732,7 @@
           "Feed"
         ],
         "summary": "공유 전용 이미지 업로드 URL",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "201": {
             "description": "계획된 성공 응답",
@@ -2624,6 +2764,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "requestBody": {
@@ -2660,7 +2803,7 @@
           "Feed"
         ],
         "summary": "공유 이미지 검증",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "200": {
             "description": "계획된 성공 응답",
@@ -2692,6 +2835,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -2727,7 +2873,7 @@
           "Feed"
         ],
         "summary": "좋아요와 아카이브 추가",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "204": {
             "description": "계획된 성공 응답"
@@ -2752,6 +2898,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -2773,7 +2922,7 @@
           "Feed"
         ],
         "summary": "좋아요 취소",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "204": {
             "description": "계획된 성공 응답"
@@ -2798,6 +2947,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -2821,7 +2973,7 @@
           "Feed"
         ],
         "summary": "좋아요 아카이브",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "200": {
             "description": "계획된 성공 응답",
@@ -2853,6 +3005,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -2873,7 +3028,7 @@
           "Feed"
         ],
         "summary": "내 게시물",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "200": {
             "description": "계획된 성공 응답",
@@ -2905,6 +3060,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -2924,7 +3082,7 @@
           "Mimic"
         ],
         "summary": "내 옷으로 따라입기 요청",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "202": {
             "description": "계획된 성공 응답",
@@ -2956,6 +3114,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "requestBody": {
@@ -2983,7 +3144,7 @@
           "Mimic"
         ],
         "summary": "매칭 결과 조회",
-        "x-implementation-status": "planned",
+        "x-implementation-status": "implemented-local",
         "responses": {
           "200": {
             "description": "계획된 성공 응답",
@@ -3015,6 +3176,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         },
         "parameters": [
@@ -3225,7 +3389,7 @@
         }
       },
       "Unavailable": {
-        "description": "503 날씨/저장소 등 의존 서비스 장애",
+        "description": "503 인증/DB/날씨/저장소 등 의존 서비스 미설정 또는 장애",
         "content": {
           "application/json": {
             "schema": {
@@ -3477,7 +3641,9 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "deprecated": true,
+            "description": "업로드·소유권·삭제 수명주기 계약 전까지 미지원이며, 값이 전달되면 422 UNSUPPORTED_FIELD로 거절한다."
           }
         },
         "minProperties": 1,
@@ -3972,7 +4138,8 @@
               "subcategory": {
                 "anyOf": [
                   {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 80
                   },
                   {
                     "type": "null"
@@ -3996,7 +4163,8 @@
               "subcategory": {
                 "anyOf": [
                   {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 80
                   },
                   {
                     "type": "null"
@@ -4067,7 +4235,8 @@
               "subcategory": {
                 "anyOf": [
                   {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 80
                   },
                   {
                     "type": "null"
@@ -4152,7 +4321,8 @@
               "subcategory": {
                 "anyOf": [
                   {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 80
                   },
                   {
                     "type": "null"
@@ -4229,7 +4399,8 @@
               "subcategory": {
                 "anyOf": [
                   {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 80
                   },
                   {
                     "type": "null"
@@ -5499,7 +5670,7 @@
             ]
           }
         },
-      "description": "owned garment IDs 기반 서버 스냅샷 저장. saved_outfit_id/outfit_id 동시 non-null 금지. source ID는 출처일 뿐 날짜 없는 보관함을 변경하지 않음. 미래 worn 금지. planned rating은 null. 날씨의 날짜·지역을 서버 검증하고 불명확하면 null."
+        "description": "owned garment IDs 기반 서버 스냅샷 저장. saved_outfit_id/outfit_id 동시 non-null 금지. source ID는 출처일 뿐 날짜 없는 보관함을 변경하지 않음. 미래 worn 금지. planned rating은 null. 날씨의 날짜·지역을 서버 검증하고 불명확하면 null."
       },
       "FeedPostCreate": {
         "type": "object",
@@ -5556,7 +5727,7 @@
             ]
           }
         },
-      "description": "공유용 private draft만 생성. 검증된 feed media 확보 후 PATCH로 public 전환. source_ootd_id는 본인 것만 허용하고 DTO로 노출 금지. 갤러리 게시도 가능. 날씨는 사용자 입력 태그이며 실제 날씨 사실로 간주하지 않음."
+        "description": "공유용 private draft만 생성. 검증된 feed media 확보 후 PATCH로 public 전환. source_ootd_id는 본인 것만 허용하고 DTO로 노출 금지. 갤러리 게시도 가능. 날씨는 사용자 입력 태그이며 실제 날씨 사실로 간주하지 않음."
       },
       "FeedPost": {
         "type": "object",
@@ -5743,7 +5914,9 @@
         ],
         "properties": {
           "source_item_key": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^source-[1-9][0-9]*$",
+            "maxLength": 20
           },
           "garment_id": {
             "anyOf": [
@@ -5769,7 +5942,8 @@
             ]
           },
           "reason": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 500
           }
         }
       },
@@ -5806,6 +5980,7 @@
           },
           "matches": {
             "type": "array",
+            "maxItems": 10,
             "items": {
               "$ref": "#/components/schemas/MimicMatch"
             }
@@ -5813,7 +5988,9 @@
           "model_version": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "pattern": "^[A-Za-z0-9._:-]{1,100}$",
+                "maxLength": 100
               },
               {
                 "type": "null"
@@ -5843,7 +6020,7 @@
             ]
           }
         },
-        "description": "similarity는 모델별 원시 유사도이지 일치 확률이 아님. succeeded도 일부 unmatched 가능. no_match는 등록 CTA. 저장은 사용자가 매칭을 확인 후 owned garment IDs로 saved-outfits POST."
+        "description": "similarity는 모델별 원시 유사도이지 일치 확률이 아님. source_item_key와 reason은 BFF가 비식별·서버 문구로 재투영한다. succeeded도 일부 unmatched 가능. no_match는 등록 CTA. 저장은 사용자가 매칭을 확인 후 owned garment IDs로 saved-outfits POST."
       },
       "ClosetStats": {
         "type": "object",
@@ -5970,5 +6147,5 @@
       }
     }
   },
-  "x-implementation-status": "planned"
+        "x-implementation-status": "implemented-local"
 }

@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "fixture_id": "fixture-dev-seed-v1",
+  "environment": "disposable-local-only",
+  "taxonomy": {
+    "status": "placeholder-not-final",
+    "version": "fixture-taxonomy-v1",
+    "items": [
+      {
+        "id": "81000000-0000-4000-8000-000000000001",
+        "code": "fixture_style_01",
+        "label": "Fixture Style 01",
+        "definition": "Synthetic placeholder; not a product taxonomy decision."
+      },
+      {
+        "id": "81000000-0000-4000-8000-000000000002",
+        "code": "fixture_style_02",
+        "label": "Fixture Style 02",
+        "definition": "Synthetic placeholder; not a product taxonomy decision."
+      },
+      {
+        "id": "81000000-0000-4000-8000-000000000003",
+        "code": "fixture_style_03",
+        "label": "Fixture Style 03",
+        "definition": "Synthetic placeholder; not a product taxonomy decision."
+      },
+      {
+        "id": "81000000-0000-4000-8000-000000000004",
+        "code": "fixture_style_04",
+        "label": "Fixture Style 04",
+        "definition": "Synthetic placeholder; not a product taxonomy decision."
+      },
+      {
+        "id": "81000000-0000-4000-8000-000000000005",
+        "code": "fixture_style_05",
+        "label": "Fixture Style 05",
+        "definition": "Synthetic placeholder; not a product taxonomy decision."
+      }
+    ]
+  },
+  "profiles": [
+    {
+      "id": "82000000-0000-4000-8000-000000000001",
+      "display_name": "Fixture User 01",
+      "timezone": "Asia/Seoul",
+      "onboarding": {
+        "knows_aesthetic": null,
+        "tutorial_seen": true,
+        "completed": false
+      },
+      "preferences": [
+        {
+          "aesthetic_id": "81000000-0000-4000-8000-000000000001",
+          "weight": 0.7
+        },
+        {
+          "aesthetic_id": "81000000-0000-4000-8000-000000000002",
+          "weight": 0.3
+        }
+      ]
+    }
+  ],
+  "permitted_image_metadata": [
+    {
+      "id": "83000000-0000-4000-8000-000000000001",
+      "owner_profile_id": "82000000-0000-4000-8000-000000000001",
+      "logical_name": "fixture-flatlay-01",
+      "source_kind": "synthetic",
+      "permission_record": "fixture-permission-v1",
+      "metadata_only": true,
+      "contains_person": false,
+      "inference_testing_allowed": true,
+      "training_allowed": false,
+      "redistribution_allowed": false
+    }
+  ]
+}

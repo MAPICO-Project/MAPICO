@@ -1,0 +1,13 @@
+{
+  "fixture_id": "fixture-get-me-auth-error-v1",
+  "operation_id": "getMe",
+  "status": 401,
+  "body": {
+    "error": {
+      "code": "AUTH_REQUIRED",
+      "message": "인증이 필요합니다.",
+      "retryable": false,
+      "request_id": "11111111-1111-4111-8111-111111111111"
+    }
+  }
+}

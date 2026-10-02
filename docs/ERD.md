@@ -1,6 +1,6 @@
 # 마피코 ERD v0.3
 
-실제 SQL의 핵심 관계. auth.users/storage 객체는 외부 플랫폼 영역이며 총 public 테이블 22개다. 제품 단계 신규 관계를 포함하되 API 구현 완료를 뜻하지 않는다.
+실제 SQL의 핵심 관계. auth.users/storage 객체는 외부 플랫폼 영역이며 총 public 테이블 24개다. G8의 immutable source/candidate snapshot 관계를 포함한다.
 
 ```mermaid
 erDiagram
@@ -38,7 +38,19 @@ erDiagram
     profiles ||--o{ post_likes : likes
     feed_posts ||--o{ mimic_requests : inspiration
     profiles ||--o{ mimic_requests : requests
+    mimic_requests ||--o{ mimic_source_items : snapshots
+    feed_media ||--o{ mimic_source_items : source
+    mimic_requests ||--o{ mimic_candidate_items : candidates
+    garments ||--o{ mimic_candidate_items : candidate
     profiles ||--o{ idempotency_keys : deduplicates
+    profiles {
+      uuid id PK
+      text display_name "nullable"
+      text timezone
+      boolean knows_aesthetic "nullable"
+      boolean tutorial_seen
+      boolean onboarding_completed
+    }
     saved_outfits {
       uuid id PK
       uuid user_id FK
@@ -63,6 +75,21 @@ erDiagram
       text caption
       text visibility
       timestamptz deleted_at
+    }
+    mimic_source_items {
+      uuid job_id FK
+      uuid feed_media_id FK
+      text source_item_key
+      uuid storage_object_id
+      timestamptz storage_updated_at
+    }
+    mimic_candidate_items {
+      uuid job_id FK
+      uuid garment_id FK
+      uuid asset_id FK
+      int garment_version
+      uuid storage_object_id
+      timestamptz storage_updated_at
     }
 ```
 
