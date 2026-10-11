@@ -16,54 +16,23 @@ let weatherMode = args.weather ?? 'kma';
 const apiRoot = fileURLToPath(new URL('../api/', import.meta.url));
 const workerModeFile = fileURLToPath(new URL('.fake-worker-mode', import.meta.url));
 const demo = await loadDemoEnv();
-// 백엔드는 날씨 제공자를 "정규화 JSON을 주는 HTTPS 어댑터"로 기대한다(계약 문제 기록 참고).
-// 데모에서는 이 가상 주소로 오는 요청을 아래 KMA 어댑터가 받아 처리한다.
+// 날씨: kma(기본) = 백엔드 lib의 내장 KMA(WEATHER_PROVIDER=kma, 10-11 수정분).
+// fake/down = 이 서버의 가상 어댑터로 고정 날씨·장애를 재현한다(시연용). /__demo/weather?mode= 로 실행 중 전환.
 const WEATHER_ADAPTER = 'https://weather-adapter.demo.invalid/current';
-const env = { ...process.env, ...demo.env, CORS_ALLOWED_ORIGINS: origins.join(','),
-  WEATHER_PROVIDER_BASE_URL: WEATHER_ADAPTER, WEATHER_PROVIDER_API_KEY: 'demo-adapter-key' };
+const env = { ...process.env, ...demo.env, CORS_ALLOWED_ORIGINS: origins.join(',') };
+function applyWeatherMode() {
+  if (weatherMode === 'kma') Object.assign(env, { WEATHER_PROVIDER: 'kma', WEATHER_PROVIDER_BASE_URL: demo.kma.baseUrl ?? '', WEATHER_PROVIDER_API_KEY: demo.kma.key ?? '' });
+  else Object.assign(env, { WEATHER_PROVIDER: 'adapter', WEATHER_PROVIDER_BASE_URL: WEATHER_ADAPTER, WEATHER_PROVIDER_API_KEY: 'demo-adapter-key' });
+}
+applyWeatherMode();
 Object.assign(process.env, env); // process.env를 직접 읽는 모듈도 같은 값을 보게 한다(이 프로세스 안에서만)
 
-// ---- KMA 초단기실황 어댑터 ----
-function kmaGrid(lat, lon) {
-  const RE = 6371.00877 / 5.0, DEG = Math.PI / 180, slat1 = 30 * DEG, slat2 = 60 * DEG, olon = 126 * DEG, olat = 38 * DEG;
-  let sn = Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5);
-  sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(sn);
-  let sf = Math.tan(Math.PI * 0.25 + slat1 * 0.5); sf = Math.pow(sf, sn) * Math.cos(slat1) / sn;
-  let ro = Math.tan(Math.PI * 0.25 + olat * 0.5); ro = RE * sf / Math.pow(ro, sn);
-  let ra = Math.tan(Math.PI * 0.25 + lat * DEG * 0.5); ra = RE * sf / Math.pow(ra, sn);
-  let theta = lon * DEG - olon; if (theta > Math.PI) theta -= 2 * Math.PI; if (theta < -Math.PI) theta += 2 * Math.PI; theta *= sn;
-  return { nx: Math.floor(ra * Math.sin(theta) + 43 + 0.5), ny: Math.floor(ro - ra * Math.cos(theta) + 136 + 0.5) };
-}
-const PTY = { 0: 'none', 1: 'rain', 2: 'mixed', 3: 'snow', 5: 'rain', 6: 'mixed', 7: 'snow' };
+// ---- 가상 날씨 어댑터(fake/down) ----
 async function weatherAdapter(url) {
-  const lat = Number(url.searchParams.get('lat')); const lon = Number(url.searchParams.get('lon'));
-  const validAt = url.searchParams.get('valid_at');
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   if (weatherMode === 'down') return json(503, { error: 'demo_weather_down' });
-  if (weatherMode === 'fake') {
-    return json(200, { issued_at: new Date(Date.now() - 60000).toISOString(), valid_at: validAt, temperature_c: 18.5,
-      feels_like_c: null, precipitation_probability: null, precipitation_type: 'none', humidity: 55, air_quality: null });
-  }
-  if (!demo.kma.baseUrl || !demo.kma.key) return json(503, { error: 'kma_not_configured' });
-  // 초단기실황은 매시 40분 이후 제공 → 45분 전이면 한 시간 전 자료를 쓴다(KST).
-  const kst = new Date(Date.now() + 9 * 3600000 - 45 * 60000);
-  const baseDate = kst.toISOString().slice(0, 10).replaceAll('-', ''); const baseTime = `${String(kst.getUTCHours()).padStart(2, '0')}00`;
-  const { nx, ny } = kmaGrid(lat, lon);
-  const target = new URL(`${demo.kma.baseUrl.replace(/\/$/, '')}/getUltraSrtNcst`);
-  for (const [k, v] of Object.entries({ serviceKey: demo.kma.key, pageNo: '1', numOfRows: '20', dataType: 'JSON',
-    base_date: baseDate, base_time: baseTime, nx: String(nx), ny: String(ny) })) target.searchParams.set(k, v);
-  try {
-    const response = await fetch(target, { signal: AbortSignal.timeout(3500) });
-    const body = await response.json();
-    const items = body?.response?.body?.items?.item;
-    if (!Array.isArray(items)) return json(502, { error: 'kma_bad_response' });
-    const value = Object.fromEntries(items.map(item => [item.category, Number(item.obsrValue)]));
-    if (!Number.isFinite(value.T1H)) return json(502, { error: 'kma_missing_temperature' });
-    const issued = new Date(Date.UTC(+baseDate.slice(0, 4), +baseDate.slice(4, 6) - 1, +baseDate.slice(6, 8), +baseTime.slice(0, 2) - 9));
-    return json(200, { issued_at: issued.toISOString(), valid_at: validAt, temperature_c: value.T1H, feels_like_c: null,
-      precipitation_probability: null, precipitation_type: PTY[value.PTY] ?? 'unknown',
-      humidity: Number.isFinite(value.REH) ? value.REH : null, air_quality: null });
-  } catch { return json(502, { error: 'kma_unreachable' }); }
+  return json(200, { issued_at: new Date(Date.now() - 60000).toISOString(), valid_at: url.searchParams.get('valid_at'), temperature_c: 18.5,
+    feels_like_c: null, precipitation_probability: null, precipitation_type: 'none', humidity: 55, air_quality: null });
 }
 const request = (input, init) => {
   const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
@@ -135,7 +104,7 @@ const server = http.createServer(async (req, res) => {
     return res.status(200).json({ mode: current });
   }
   if (url.pathname === '/__demo/weather') {
-    res.setHeader('Access-Control-Allow-Origin', origins[0]); weatherMode = url.searchParams.get('mode') ?? weatherMode; return res.status(200).json({ weather: weatherMode }); }
+    res.setHeader('Access-Control-Allow-Origin', origins[0]); const m = url.searchParams.get('mode'); if (['kma', 'fake', 'down'].includes(m)) { weatherMode = m; applyWeatherMode(); } return res.status(200).json({ weather: weatherMode }); }
   const route = routes.find(item => item.regex.test(url.pathname));
   if (!route) return res.status(404).json({ error: { code: 'NOT_FOUND' } });
   const match = route.regex.exec(url.pathname);
@@ -144,10 +113,6 @@ const server = http.createServer(async (req, res) => {
   try {
     const { handler, rawBody } = await load(route);
     if (!rawBody) { const buf = await readBody(req); req.body = buf.length ? buf.toString('utf8') : undefined; }
-    // 계약 문제 기록 #1: 백엔드 preflight가 Idempotency-Key 헤더를 허용하지 않아 브라우저에서 생성 요청이 막힌다.
-    // 데모 서버에서만 허용 헤더에 추가한다.
-    const setHeader = res.setHeader.bind(res);
-    res.setHeader = (name, value) => setHeader(name, name.toLowerCase() === 'access-control-allow-headers' ? `${value}, Idempotency-Key` : value);
     await handler(req, res);
   } catch (error) {
     console.error('handler error', route.file, error?.message);

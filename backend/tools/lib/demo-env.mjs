@@ -31,7 +31,7 @@ export async function loadDemoEnv() {
   const region = settings.match(/region\s*[:=]\s*([a-z0-9-]+)/i)?.[1] ?? 'ap-southeast-1';
   return {
     projectRef: ref,
-    // 데모 도구 전용 DB 접속(세션 pooler). 가짜 worker가 실제 worker가 못 하는 일을 대신할 때만 쓴다.
+    // 개발 도구 전용 DB 접속(세션 pooler). hosted-e2e.mjs가 쓴다(데모 앱 흐름에는 필요 없음).
     db: dbPassword ? { host: `aws-0-${region}.pooler.supabase.com`, port: 5432, user: `postgres.${ref}`, password: dbPassword,
       database: 'postgres', ssl: { rejectUnauthorized: false } } : null,
     kma: { baseUrl: valueAfter(weather, 'End Point'), key: valueAfter(weather, '일반 인증키') },

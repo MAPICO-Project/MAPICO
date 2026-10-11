@@ -2,7 +2,7 @@
   "name": "mafico-demo-tools",
   "private": true,
   "type": "module",
-  "description": "데모 전용 개발 도구(dev-server, fake-ai-worker, demo-seed). 배포·테스트 대상 아님.",
+  "description": "개발 도구(dev-server, fake-ai-worker, demo-seed, hosted-e2e). pg는 hosted-e2e용. 배포·테스트 대상 아님.",
   "dependencies": {
     "pg": "8.13.1"
   }

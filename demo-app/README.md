@@ -9,8 +9,7 @@ API는 [openapi.yaml](../backend/docs/openapi.yaml) 계약을 그대로 호출�
 준비: Node 22, Python + Pillow(가짜 worker의 이미지 자르기), Flutter SDK(`~/dev/flutter` 또는 PATH), Chrome. 키는 저장소 밖 `../_key/`에서 읽고 출력하지 않는다.
 
 ```bash
-# 1) 로컬 백엔드(원격 Supabase에 붙음). 날씨: --weather kma|fake|down
-npm --prefix backend/tools ci
+# 1) 로컬 백엔드(원격 Supabase에 붙음). 날씨: --weather kma(기본, 백엔드 내장 KMA)|fake|down
 node backend/tools/dev-server.mjs
 
 # 2) 가짜 AI worker(분석 job을 기다렸다가 처리). 모드는 앱의 "데모 제어" 패널로 바꾼다.

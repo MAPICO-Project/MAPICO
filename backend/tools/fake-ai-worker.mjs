@@ -12,12 +12,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHmac, randomUUID } from 'node:crypto';
-import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { loadDemoEnv } from './lib/demo-env.mjs';
-
-const require = createRequire(import.meta.url);
-const { Client } = require('pg');
 
 const argv = process.argv.slice(2);
 const opt = (name, fallback) => { const i = argv.indexOf(`--${name}`); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : fallback; };
@@ -63,14 +59,15 @@ async function upload(key, bytes) {
   if (!response.ok) throw Error(`upload ${response.status} ${(await response.text()).slice(0, 200)}`);
 }
 
-// 계약 문제 기록 #2: callback은 cutout 객체 owner가 사용자이길 요구하지만 서버 키로 올린 객체는 owner가 비어 있다.
-// 실제 worker는 이를 맞출 방법이 없다. 데모에서는 DB에 직접 owner를 기록한다(이 worker가 방금 올린 경로만).
-async function setOwner(userId, keys) {
-  if (!demo.db) throw Error('DB 접속 정보가 없어 cutout owner를 맞출 수 없습니다(_key/supabase_db_password.txt).');
-  const client = new Client(demo.db); await client.connect();
-  try {
-    await client.query("update storage.objects set owner=$1::uuid, owner_id=$1::text where bucket_id='closet-private' and name = any($2::text[])", [userId, keys]);
-  } finally { await client.end(); }
+// 추구미 점수(N4, 10-11): 옷마다 한 추구미를 높게 준다. 확정 시 garment_aesthetic_scores로 저장돼 추천·통계에 쓰인다.
+// 실제 모델 점수가 아니라 데모용 값이다.
+let aestheticIds = null;
+async function aestheticScores(seed) {
+  if (!aestheticIds) {
+    const rows = await (await fetch(`${base}/rest/v1/aesthetics?select=id&active=eq.true&order=code`, { headers: service })).json();
+    aestheticIds = Array.isArray(rows) ? rows.map(row => row.id) : [];
+  }
+  return aestheticIds.map((id, i) => ({ aesthetic_id: id, score: i === seed % aestheticIds.length ? 0.85 : 0.2 }));
 }
 
 async function callback(job, payload) {
@@ -99,16 +96,16 @@ async function process1(job) {
   if (crop.status !== 0) throw Error(`crop failed: ${crop.stderr.slice(0, 300)}`);
   const boxes = JSON.parse(crop.stdout);
   const failIndex = mode === 'partial' && count > 1 ? count - 1 : -1;
-  const items = []; const keys = [];
+  const items = [];
   for (let i = 0; i < count; i++) {
     if (i === failIndex) continue;
     const key = `${job.user_id}/${job.batch_id}/cutouts/item-${i}.jpg`;
-    await upload(key, fs.readFileSync(path.join(dir, `item-${i}.jpg`))); keys.push(key);
+    await upload(key, fs.readFileSync(path.join(dir, `item-${i}.jpg`)));
     items.push({ client_item_key: `item-${i}`, item_index: i, bbox: boxes[i].bbox, mask_object_key: key,
-      attributes: { category: labels[i] ?? ROTATION[i % ROTATION.length], color_hex: boxes[i].color_hex, pattern: null },
+      attributes: { category: labels[i] ?? ROTATION[i % ROTATION.length], color_hex: boxes[i].color_hex, pattern: null,
+        aesthetic_scores: await aestheticScores(parseInt(job.batch_id.slice(0, 4), 16) + i) },
       confidence: Math.round((0.72 + 0.05 * (i % 4)) * 100) / 100 });
   }
-  await setOwner(job.user_id, keys);
   const errors = failIndex >= 0 ? [{ code: 'SEGMENTATION_FAILED', message: '데모: 한 벌 분리에 실패했다고 보고합니다.', client_item_key: `item-${failIndex}` }] : [];
   const result = await callback(job, { ...common, status: errors.length ? 'partial_failed' : 'succeeded', items, errors });
   fs.rmSync(dir, { recursive: true, force: true });

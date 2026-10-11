@@ -119,7 +119,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       await api.post('/saved-outfits', idempotent: true, body: {
         'title': '추천 코디 ${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}',
         'garment_ids': outfit['garment_ids'],
-        'source_recommendation_id': _set!['id'],
+        // 이름과 달리 추천 요청 id가 아니라 추천 코디(outfit) id다(OpenAPI 설명 보강, 10-11).
+        'source_recommendation_id': outfit['id'],
       });
       if (mounted) showSnack(context, '코디 보관함에 저장했어요');
     } catch (e) {
@@ -387,7 +388,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Expanded(
               child: OutlinedButton(
                 onPressed: () => context.push('/mix/compose',
-                    extra: ComposeOutfitArgs(initialGarmentIds: ids, sourceRecommendationId: set['id'] as String)),
+                    extra: ComposeOutfitArgs(initialGarmentIds: ids, sourceRecommendationId: outfit['id'] as String)),
                 child: const Text('스타일 믹스'),
               ),
             ),
