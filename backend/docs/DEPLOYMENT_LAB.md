@@ -1,6 +1,6 @@
 # 마피코 Vercel → Supabase 연결 실습
 
-> 상태 갱신 (2026-10-02): 저장소는 비공개 `MAFICO-Project/mafico` 모노레포로 통합됐다. 백엔드 배포의 Root Directory는 `backend`로 설정한다. 아래 계정 설정은 사용자가 직접 확인하며, 비밀값과 원격 SQL은 Git 구조 변경으로 자동 이전되지 않는다.
+> 상태 갱신 (2026-10-11): 작업 저장소가 `My-Fit-Core/My-fit-core-BE`로 바뀌었다(이전 `MAFICO-Project/mafico`). Vercel Git 연결도 새 저장소로 다시 연결해야 한다. 백엔드 배포의 Root Directory는 `backend`로 설정한다. 아래 계정 설정은 사용자가 직접 확인하며, 비밀값과 원격 SQL은 Git 구조 변경으로 자동 이전되지 않는다.
 
 2026-09-28 확인. 사용자가 직접 실습하기 위한 안내이며 이 문서를 만들면서 계정·요금제·원격 DB·배포를 변경하지 않았다.
 
@@ -29,7 +29,7 @@ Vercel은 코드를 실행하고, Supabase는 DB/Auth/Storage를 제공한다. �
 
 ## 1. Vercel 계정 연결과 현재 제한
 
-현재 프로젝트는 iscream/backend, 임시 화면은 iscream/mafico-preview. GitHub 코드는 MAFICO-Project/mafico의 비공개 모노레포다.
+현재 프로젝트는 iscream/backend, 임시 화면은 iscream/mafico-preview. GitHub 코드는 My-Fit-Core/My-fit-core-BE 모노레포다.
 
 ### 1-1. 개인 계정에 GitHub 연결
 
@@ -54,7 +54,7 @@ Vercel은 코드를 실행하고, Supabase는 DB/Auth/Storage를 제공한다. �
 
 ### 1-3. 조건 해결 후 저장소 연결
 
-Vercel Dashboard → iscream → **backend** → Settings → Git → Connect Git Repository → MAFICO-Project/mafico. 연결 후 Root Directory를 `backend`로 지정한다.
+Vercel Dashboard → iscream → **backend** → Settings → Git → Connect Git Repository → My-Fit-Core/My-fit-core-BE. 연결 후 Root Directory를 `backend`로 지정한다.
 
 저장소가 목록에 없으면 GitHub의 Vercel GitHub App 설치/권한에서 **해당 저장소만** 허용됐는지 확인한다. OAuth Login Connection과 GitHub App repository access는 다르다. [GitHub 연동 안내](https://vercel.com/docs/git/vercel-for-github)
 

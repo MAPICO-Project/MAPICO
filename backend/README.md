@@ -1,6 +1,6 @@
 # MAFICO(MyFit:Core) · 마피코 백엔드
 
-MAFICO 모노레포의 `backend/` 영역입니다. 저장소: https://github.com/MAFICO-Project/mafico (비공개).
+MAFICO 모노레포의 `backend/` 영역입니다. 저장소: https://github.com/My-Fit-Core/My-fit-core-BE (2026-10-11부터, 이전: MAFICO-Project/mafico).
 모바일 웹 우선. 현재 구현은 배포/연결 검증 단계이며 제품 API 전체 구현이 아닙니다.
 
 이 문서는 백엔드 개발·배포 전용입니다. 프로젝트 전체 소개와 파트별 현황은 [루트 README](../README.md)를 확인합니다.
