@@ -10,7 +10,7 @@
 
 완료의 의미는 다음 네 조건을 모두 만족하는 것이다.
 
-1. ERD의 22개 public 테이블이 개발용 Supabase에 적용되고 RLS·권한·Storage 경계가 검증된다.
+1. ERD의 24개 public 테이블이 개발용 Supabase에 적용되고 RLS·권한·Storage 경계가 검증된다.
 2. 각 테이블이 최소 한 개의 제품 흐름, 내부 job 또는 멱등 처리에서 실제로 사용된다.
 3. 현재 OpenAPI 50개 operation은 별도 계약 변경으로 제외하지 않는 한 모두 구현·테스트 대상이다.
 4. 모바일 웹, Backend, AI worker가 Preview 환경에서 실제 계약으로 통합 테스트할 수 있다.
@@ -78,7 +78,7 @@ flowchart LR
 | R3 AI 등록 파이프라인 | 10/27~11/9 | G4 | `create/get/retryAnalysisJob`, `listGarmentDrafts`, `updateGarmentDraft`, `confirmGarmentBatch`, `receiveAnalysisResult` / 21 | worker callback·draft·원자 확정 / Vision baseline·검토 client | 2~6벌→draft→수정→확정 E2E와 데이터/model version 평가 리포트 |
 | R4 추천·보관·OOTD | 11/3~11/16 | G5·G6 | weather 1, recommendation 3, saved outfit 5, OOTD 5, statistics 1 / 36 | 날씨·추천·보관·착용 / 홈·보관함·캘린더 UI와 추천·설명 | 추천→보관/착용 UI E2E, 추천 평가·fallback 리포트 |
 | R5 피드·따라입기 | 11/10~11/23, 11/17~23 시험은 회귀 중심 | G7·G8 | feed/media/like 11, mimic 2 / 49 | 가시성·media·matching / 피드·따라입기 consumer | 게시→좋아요→따라입기→보관 E2E; 외부 AI 전송·학습 후보 삭제 검증 |
-| R6 전체 통합·정리 | 11/24~11/30 | G9·G10 | `requestAccountDeletion` / 50 | 탈퇴·Storage/파생 정리, idempotency, coverage / 모바일 실기기·실패 UI | 50 operation·22테이블 coverage, 삭제·회귀 테스트 통과 |
+| R6 전체 통합·정리 | 11/24~11/30 | G9·G10 | `requestAccountDeletion` / 50 | 탈퇴·Storage/파생 정리, idempotency, coverage / 모바일 실기기·실패 UI | 50 operation·24테이블 coverage, 삭제·회귀 테스트 통과 |
 | R7 동결·QA | 12/1~12/6 | G10 | 50 유지 | 성능·보안·복구·관측, 배포 고정 / 시연 데이터·발표·접근성 | 필수 시연 2회 연속 성공, 치명 결함 0 |
 | 제출 | 12/7 | 종료 | 50 유지 | 제출 태그·문서·배포 URL / 발표·시연 | 재현 가능한 제출본 |
 | 유지보수 | 12/8~12/13, 시험 주간 | 유지 | 신규 범위 금지 | 차단 결함과 문서만 보완 | 변경 이력과 회귀검증 |

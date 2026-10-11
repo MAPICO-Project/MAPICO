@@ -17,7 +17,7 @@
 4. `03 추천·OOTD`: 날씨·취향·옷장→추천→보관/착용
 5. `04 피드·따라입기`: 공개 경계와 개인 데이터 projection
 6. `05 백엔드 조기 배포`: 로컬→Preview→FE/AI 피드백 루프
-7. `06 ERD coverage`: 22테이블을 사용자 흐름과 테스트 gate에 연결
+7. `06 ERD coverage`: 24테이블을 사용자 흐름과 테스트 gate에 연결
 8. `07 미결 결정`: TPO, OOTD 수, taxonomy, 시연 fallback
 
 ## 3. 전체 MVP 사용자 여정

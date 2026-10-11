@@ -19,7 +19,7 @@
 
 ## 저장소에서 준비된 항목
 
-- 배포·Supabase 실습 순서와 제한은 [DEPLOYMENT_LAB.md](../deliverables/backend/DEPLOYMENT_LAB.md)에 정리돼 있다.
+- 배포·Supabase 실습 순서와 제한은 [DEPLOYMENT_LAB.md](../docs/DEPLOYMENT_LAB.md)에 정리돼 있다.
 - backend에는 health/readiness/catalog/aesthetics 진단 핸들러가 있다.
 - 최신 구현 상태 기준 `npm test` 20/20, `npm run test:schema` 통과다. hosted Supabase 통합 완료를 뜻하지 않는다.
 

@@ -1,6 +1,6 @@
 # DB 흐름과 상세 ERD
 
-2026-10-02 팀 검토본. 현재 migration 12개를 일회용 PGlite에 적용해 **public 테이블 24개**의 실제 컬럼·PK·FK·UNIQUE를 조회했다. 원격 DB는 접근하지 않았고 Auth/Storage는 로컬 스텁이다.
+2026-10-10 갱신. 현재 migration 17개를 일회용 PGlite에 적용해 **public 테이블 28개**의 실제 컬럼·PK·FK·UNIQUE를 조회했다. 원격 DB는 접근하지 않았고 Auth/Storage는 로컬 스텁이다.
 
 도메인 요약도의 화살표는 업무 흐름이며 FK가 아니다. 상세 ERD는 실제 FK만 표시하며, 읽기 쉽게 PK·FK와 주요 업무 필드만 보여준다. 겹치는 테이블은 같은 테이블의 재표시다. 전체 컬럼·제약은 [migration](../../backend/supabase/migrations/)과 [DB 설계](../../backend/docs/DB_DESIGN.md)가 기준이다.
 
@@ -37,6 +37,8 @@ flowchart TD
 erDiagram
   direction TB
   profiles ||--o{ idempotency_keys : "user_id"
+  profiles ||..o{ media_uploads : "user_id"
+  media_uploads o|..o| profiles : "id_avatar_object_key"
   tpo_presets o|..o{ profiles : "default_tpo"
   auth_users ||--o| profiles : "id"
   aesthetics ||--o{ user_aesthetic_preferences : "aesthetic_id"
@@ -49,6 +51,7 @@ erDiagram
     text display_name "nullable"
     text default_tpo FK "nullable"
     boolean onboarding_completed "required"
+    text avatar_object_key FK,UK "nullable"
   }
   aesthetics {
     uuid id PK "required"
@@ -58,6 +61,7 @@ erDiagram
     uuid user_id PK,FK "required"
     uuid aesthetic_id PK,FK "required"
     numeric weight "required"
+    text role "required"
   }
   tpo_presets {
     text code PK "required"
@@ -66,6 +70,14 @@ erDiagram
     uuid user_id PK,FK "required"
     text scope PK "required"
     text key PK "required"
+  }
+  media_uploads {
+    uuid id PK "required"
+    uuid user_id FK "required"
+    text purpose "required"
+  }
+  storage_cleanup_queue {
+    uuid id PK "required"
   }
 ```
 
@@ -86,6 +98,7 @@ erDiagram
   garment_batches ||..o{ garment_drafts : "batch_id"
   profiles ||..o{ garment_drafts : "user_id"
   analysis_jobs ||..o{ garment_drafts : "job_id"
+  garments ||..o| garment_embeddings : "garment_id"
   garment_assets ||..o{ garments : "asset_id"
   profiles ||..o{ garments : "user_id"
   garment_drafts ||..o| garments : "source_draft_id"
@@ -98,6 +111,7 @@ erDiagram
     text display_name "nullable"
     text default_tpo FK "nullable"
     boolean onboarding_completed "required"
+    text avatar_object_key FK,UK "nullable"
   }
   aesthetics {
     uuid id PK "required"
@@ -139,6 +153,10 @@ erDiagram
     uuid garment_id PK,FK "required"
     uuid aesthetic_id PK,FK "required"
   }
+  garment_embeddings {
+    uuid user_id FK "required"
+    uuid garment_id PK,FK "required"
+  }
 ```
 
 ## 4. 추천·보관함·착용 기록
@@ -147,13 +165,16 @@ erDiagram
 erDiagram
   direction TB
   profiles ||..o{ garments : "user_id"
+  profiles ||..o{ media_uploads : "user_id"
   profiles ||..o{ ootd_entries : "user_id"
   outfit_recommendations o|..o{ ootd_entries : "outfit_id"
   weather_snapshots o|..o{ ootd_entries : "weather_snapshot_id"
+  media_uploads o|..o| ootd_entries : "photo_object_key"
   saved_outfits o|..o{ ootd_entries : "saved_outfit_id"
   garments ||..o{ outfit_items : "garment_id"
   outfit_recommendations ||..o{ outfit_items : "outfit_id"
   recommendation_requests ||..o{ outfit_recommendations : "request_id"
+  media_uploads o|..o| profiles : "id_avatar_object_key"
   tpo_presets o|..o{ profiles : "default_tpo"
   auth_users ||--o| profiles : "id"
   tpo_presets o|..o{ recommendation_requests : "tpo"
@@ -171,6 +192,7 @@ erDiagram
     text display_name "nullable"
     text default_tpo FK "nullable"
     boolean onboarding_completed "required"
+    text avatar_object_key FK,UK "nullable"
   }
   tpo_presets {
     text code PK "required"
@@ -191,6 +213,7 @@ erDiagram
     uuid weather_snapshot_id FK "nullable"
     text tpo FK "nullable"
     text status "required"
+    uuid selected_aesthetic_id FK "nullable"
   }
   outfit_recommendations {
     uuid id PK "required"
@@ -223,6 +246,12 @@ erDiagram
     uuid saved_outfit_id FK "nullable"
     text wear_status "required"
     uuid weather_snapshot_id FK "nullable"
+    text photo_object_key FK,UK "nullable"
+  }
+  media_uploads {
+    uuid id PK "required"
+    uuid user_id FK "required"
+    text purpose "required"
   }
 ```
 
@@ -232,9 +261,12 @@ erDiagram
 erDiagram
   direction TB
   feed_posts ||..o{ feed_media : "post_id"
+  garments o|..o{ feed_post_items : "garment_id"
+  feed_posts ||..o{ feed_post_items : "post_id"
   aesthetics o|..o{ feed_posts : "aesthetic_id"
   profiles ||..o{ feed_posts : "user_id"
   ootd_entries o|..o{ feed_posts : "source_ootd_id"
+  profiles ||..o{ garments : "user_id"
   mimic_requests ||--o{ mimic_candidate_items : "job_id"
   feed_posts ||..o{ mimic_requests : "post_id"
   profiles ||..o{ mimic_requests : "user_id"
@@ -251,6 +283,7 @@ erDiagram
     text display_name "nullable"
     text default_tpo FK "nullable"
     boolean onboarding_completed "required"
+    text avatar_object_key FK,UK "nullable"
   }
   aesthetics {
     uuid id PK "required"
@@ -266,6 +299,7 @@ erDiagram
     uuid saved_outfit_id FK "nullable"
     text wear_status "required"
     uuid weather_snapshot_id FK "nullable"
+    text photo_object_key FK,UK "nullable"
   }
   feed_posts {
     uuid id PK "required"
@@ -284,6 +318,21 @@ erDiagram
     uuid user_id PK,FK "required"
     uuid post_id PK,FK "required"
   }
+  feed_post_items {
+    uuid id PK "required"
+    uuid user_id FK "required"
+    uuid post_id FK "required"
+    uuid garment_id FK "nullable"
+    integer position "required"
+    text category "required"
+  }
+  garments {
+    uuid id PK "required"
+    uuid user_id FK "required"
+    uuid source_draft_id FK,UK "required"
+    uuid asset_id FK "required"
+    text category "required"
+  }
   mimic_requests {
     uuid id PK "required"
     uuid user_id FK "required"
@@ -294,8 +343,9 @@ erDiagram
     uuid job_id PK,FK "required"
     integer position "required"
     text source_item_key PK "required"
-    uuid feed_media_id "required"
-    uuid storage_object_id "required"
+    uuid feed_media_id "nullable"
+    uuid storage_object_id "nullable"
+    text category "nullable"
   }
   mimic_candidate_items {
     uuid job_id PK,FK "required"

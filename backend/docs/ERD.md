@@ -1,5 +1,7 @@
 # 마피코 ERD v0.3
 
+> 스키마에서 추출한 최신·정확한 판은 [`deliverables/visuals/ERD.md`](../../deliverables/visuals/ERD.md)입니다.
+
 실제 SQL의 핵심 관계. auth.users/storage 객체는 외부 플랫폼 영역이며 총 public 테이블 24개다. G8의 immutable source/candidate snapshot 관계를 포함한다.
 
 ```mermaid

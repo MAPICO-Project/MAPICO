@@ -105,7 +105,7 @@ select tablename, rowsecurity
 from pg_tables where schemaname = 'public' order by tablename;
 ```
 
-아무 추가 테이블이 없는 시작점이면 22테이블, 이전 임시 카탈로그 5행, 제품 테이블 RLS 활성화를 기대한다. Auth/Storage 시스템 테이블은 public count에 포함하지 않는다. Table Editor에서도 확인한다. RLS를 꺼서 연결 오류를 해결하지 않는다.
+아무 추가 테이블이 없는 시작점에서 위 3개 파일만 적용했다면 22테이블, 이후 migration을 파일명 순서대로 모두 적용하면 24테이블(`202610010005_mimic.sql`이 2개 추가), 이전 임시 카탈로그 5행, 제품 테이블 RLS 활성화를 기대한다. Auth/Storage 시스템 테이블은 public count에 포함하지 않는다. Table Editor에서도 확인한다. RLS를 꺼서 연결 오류를 해결하지 않는다.
 
 **이력 주의:** SQL Editor 실행은 CLI migration history를 자동으로 맞춰주지 않는다. 실행한 파일명·시각을 기록한다. 이후 CLI `db push`를 바로 실행하면 중복 생성 오류가 날 수 있으므로 원격 스키마와 이력을 먼저 대조/동기화한다. 운영·팀 협업은 CLI migration 관리로 전환한다. [환경/마이그레이션 관리](https://supabase.com/docs/guides/deployment/managing-environments)
 

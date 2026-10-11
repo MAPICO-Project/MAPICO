@@ -1,0 +1,15 @@
+# 비밀값: 환경변수 파일은 커밋하지 않는다(예시 파일만 허용).
+.env
+.env.*
+!.env.example
+
+# 의존성·배포 도구가 만드는 로컬 폴더
+node_modules/
+.vercel/
+
+# 로그
+*.log
+
+# OS가 만드는 파일
+.DS_Store
+Thumbs.db
