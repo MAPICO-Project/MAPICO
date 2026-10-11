@@ -15,6 +15,9 @@ insert into public.analysis_jobs(id,user_id,batch_id,status,attempt,max_attempts
 insert into storage.objects(id,bucket_id,name,owner_id,metadata) values
  ('73400000-0000-4000-8000-000000000001','closet-private','73000000-0000-4000-8000-000000000001/73100000-0000-4000-8000-000000000001/cutouts/item-0.png','73000000-0000-4000-8000-000000000001','{"mimetype":"image/png","size":"321"}');
 
+-- 2026-10-10: analysis needs the external-AI notice (track B migration).
+update public.profiles set ai_notice_accepted_at=now() where id='73000000-0000-4000-8000-000000000001';
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub','73000000-0000-4000-8000-000000000001',true);
 do $$ declare created jsonb; replay jsonb; retried jsonb; begin

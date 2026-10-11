@@ -74,10 +74,14 @@ export function validateManifest(manifest) {
     for (const preference of profile.preferences) {
       assert(aestheticIds.has(preference.aesthetic_id) && !preferenceIds.has(preference.aesthetic_id), 'invalid or duplicate preference aesthetic');
       assert(typeof preference.weight === 'number' && preference.weight > 0 && preference.weight <= 1, 'invalid preference weight');
+      assert(['main', 'sub'].includes(preference.role), 'invalid preference role');
       preferenceIds.add(preference.aesthetic_id);
       total += preference.weight;
     }
     assert(Math.abs(total - 1) <= 0.0001, 'preference weights must sum to one');
+    const main = profile.preferences.filter(preference => preference.role === 'main');
+    assert(main.length === 1, 'fixture preferences need exactly one main aesthetic');
+    assert(profile.preferences.every(preference => preference.weight <= main[0].weight), 'main weight must not be below a sub');
   }
 
   assert(Array.isArray(manifest.permitted_image_metadata) && manifest.permitted_image_metadata.length > 0, 'permitted image metadata is required');

@@ -136,7 +136,7 @@
     "createRecommendation": {
       "status": "implemented-local",
       "contract_test": "test/recommendations.test.mjs",
-      "tables": ["weather_snapshots", "recommendation_requests", "outfit_recommendations", "outfit_items", "garments", "garment_assets", "idempotency_keys"],
+      "tables": ["weather_snapshots", "recommendation_requests", "outfit_recommendations", "outfit_items", "garments", "garment_assets", "idempotency_keys", "user_aesthetic_preferences", "garment_aesthetic_scores", "aesthetics"],
       "rls_test": "supabase/tests/recommendations.sql"
     },
     "getRecommendation": {
@@ -192,8 +192,8 @@
       "tables": ["saved_outfits", "saved_outfit_items", "ootd_entries"], "rls_test": "supabase/tests/outfits_ootd.sql"
     },
     "getClosetStatistics": {
-      "status": "implemented-local", "contract_test": "test/outfits.test.mjs",
-      "tables": ["garments", "ootd_entries"], "rls_test": "supabase/tests/outfits_ootd.sql"
+      "status": "implemented-local", "contract_test": "test/statistics.test.mjs",
+      "tables": ["garments", "ootd_entries", "garment_aesthetic_scores", "aesthetics"], "rls_test": "supabase/tests/reco_weather_stats.sql"
     },
     "listFeed": {
       "status": "implemented-local", "contract_test": "test/feed.test.mjs",
@@ -201,7 +201,7 @@
     },
     "createFeedPost": {
       "status": "implemented-local", "contract_test": "test/feed.test.mjs",
-      "tables": ["feed_posts", "ootd_entries", "aesthetics", "idempotency_keys"], "rls_test": "supabase/tests/feed.sql"
+      "tables": ["feed_posts", "feed_post_items", "garments", "ootd_entries", "aesthetics", "idempotency_keys"], "rls_test": "supabase/tests/feed.sql"
     },
     "getFeedPost": {
       "status": "implemented-local", "contract_test": "test/feed.test.mjs",
@@ -209,7 +209,7 @@
     },
     "updateFeedPost": {
       "status": "implemented-local", "contract_test": "test/feed.test.mjs",
-      "tables": ["feed_posts", "feed_media", "aesthetics"], "rls_test": "supabase/tests/feed.sql"
+      "tables": ["feed_posts", "feed_post_items", "feed_media", "garments", "aesthetics"], "rls_test": "supabase/tests/feed.sql"
     },
     "deleteFeedPost": {
       "status": "implemented-local", "contract_test": "test/feed.test.mjs",
@@ -241,13 +241,30 @@
     },
     "createMimicJob": {
       "status": "implemented-local", "contract_test": "test/mimic.test.mjs",
-      "tables": ["mimic_requests", "mimic_source_items", "mimic_candidate_items", "feed_posts", "feed_media", "garments", "garment_assets", "idempotency_keys"],
+      "tables": ["mimic_requests", "mimic_source_items", "mimic_candidate_items", "feed_posts", "feed_post_items", "garments", "garment_assets", "garment_aesthetic_scores", "garment_embeddings", "idempotency_keys"],
       "rls_test": "supabase/tests/mimic.sql"
     },
     "getMimicJob": {
       "status": "implemented-local", "contract_test": "test/mimic.test.mjs",
       "tables": ["mimic_requests", "mimic_source_items", "mimic_candidate_items", "feed_posts", "garments", "garment_assets"],
       "rls_test": "supabase/tests/mimic.sql"
+    },
+    "createMediaUpload": {
+      "status": "implemented-local", "contract_test": "test/userflow.test.mjs",
+      "tables": ["media_uploads", "profiles", "idempotency_keys"], "rls_test": "supabase/tests/userflow_alignment.sql"
+    },
+    "completeMediaUpload": {
+      "status": "implemented-local", "contract_test": "test/userflow.test.mjs",
+      "tables": ["media_uploads"], "rls_test": "supabase/tests/userflow_alignment.sql"
+    },
+    "requestAccountDeletion": {
+      "status": "implemented-local", "contract_test": "test/ootd-account.test.mjs",
+      "tables": ["profiles", "garments", "ootd_entries", "feed_posts", "post_likes", "mimic_requests", "media_uploads", "storage_cleanup_queue"],
+      "rls_test": "supabase/tests/ootd_multi_account.sql"
+    },
+    "getOotdCalendar": {
+      "status": "implemented-local", "contract_test": "test/ootd-account.test.mjs",
+      "tables": ["ootd_entries"], "rls_test": "supabase/tests/ootd_multi_account.sql"
     }
   }
 }

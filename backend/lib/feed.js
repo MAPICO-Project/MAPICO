@@ -7,9 +7,12 @@ import { projectUrl } from './supabase-user.js';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const IDEMPOTENCY = /^[A-Za-z0-9._:-]{8,128}$/;
 const CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const WEATHER = new Set(['clear', 'cloudy', 'rain', 'snow', 'unknown']);
+const WEATHER = new Set(['clear', 'cloudy', 'rain', 'snow', 'wind', 'unknown']);
 const LIST_KEYS = new Set(['cursor', 'limit', 'aesthetic_id', 'weather_code', 'temperature_min', 'temperature_max']);
 const SIMPLE_LIST_KEYS = new Set(['cursor', 'limit']);
+const CATEGORIES = new Set(['outerwear', 'top', 'bottom', 'shoes', 'bag', 'accessory']);
+// A post links 1..10 of the author's own closet items (2026-10-10 decision).
+const MAX_LINKED_ITEMS = 10;
 
 function validation(requestId, status = 422) { return failure(status, 'VALIDATION_ERROR', requestId); }
 function scalar(value) { return Array.isArray(value) ? null : value; }
@@ -64,6 +67,16 @@ function validMedia(value) {
     typeof value.object_key === 'string' && value.object_key.length > 0 && value.object_key.length <= 1024 &&
     Number.isInteger(value.position) && value.position >= 0;
 }
+// Public representation of a linked closet item: link id, order and category only. The
+// author's garment_id and closet images (garment_assets) are never projected.
+function validLinkedItem(value) {
+  return value && typeof value === 'object' && UUID.test(value.id ?? '') && Number.isInteger(value.position) &&
+    value.position >= 0 && value.position < MAX_LINKED_ITEMS && CATEGORIES.has(value.category);
+}
+function validGarmentIds(value) {
+  return Array.isArray(value) && value.length >= 1 && value.length <= MAX_LINKED_ITEMS &&
+    value.every(id => typeof id === 'string' && UUID.test(id)) && new Set(value.map(id => id.toLowerCase())).size === value.length;
+}
 function validPost(value) {
   return value && typeof value === 'object' && UUID.test(value.id ?? '') && UUID.test(value.author?.id ?? '') &&
     (value.author.display_name === null || typeof value.author.display_name === 'string') &&
@@ -71,7 +84,8 @@ function validPost(value) {
     WEATHER.has(value.weather_code) && (value.temperature_c === null || Number.isFinite(Number(value.temperature_c)) && Number(value.temperature_c) >= -90 && Number(value.temperature_c) <= 60) &&
     ['private', 'public'].includes(value.visibility) && typeof value.liked_by_me === 'boolean' &&
     Number.isInteger(Number(value.like_count)) && Number(value.like_count) >= 0 && Number.isFinite(Date.parse(value.created_at)) &&
-    Array.isArray(value.media) && value.media.every(validMedia);
+    Array.isArray(value.media) && value.media.every(validMedia) &&
+    Array.isArray(value.linked_items) && value.linked_items.length <= MAX_LINKED_ITEMS && value.linked_items.every(validLinkedItem);
 }
 function rawFingerprint(rows) {
   return JSON.stringify(rows.map(row => ({ id: row.id, visibility: row.visibility,
@@ -106,7 +120,9 @@ async function projectAndSign(actorId, postIds, d) {
   return { data: first.data.map(row => ({ id: row.id.toLowerCase(), author: { id: row.author.id.toLowerCase(), display_name: row.author.display_name },
     caption: row.caption, aesthetic_id: row.aesthetic_id.toLowerCase(), weather_code: row.weather_code,
     temperature_c: row.temperature_c === null ? null : Number(row.temperature_c), visibility: row.visibility,
-    media: row.media.map(item => signed.get(item.object_key)), liked_by_me: row.liked_by_me,
+    media: row.media.map(item => signed.get(item.object_key)),
+    linked_items: row.linked_items.map(item => ({ id: item.id.toLowerCase(), position: item.position, category: item.category })),
+    liked_by_me: row.liked_by_me,
     like_count: Number(row.like_count), created_at: row.created_at })) };
 }
 async function projectOne(auth, id, d, status) {
@@ -155,9 +171,13 @@ export async function getFeedPostResponse(req, d) {
 }
 function postBody(req, requestId, patch) {
   const parsed = readJsonObject(req); if (parsed.error) return { error: failure(400, parsed.error, requestId) }; const b = parsed.data;
-  const allowed = patch ? new Set(['caption', 'aesthetic_id', 'visibility']) : new Set(['source_ootd_id', 'caption', 'aesthetic_id', 'weather_code', 'temperature_c', 'visibility']);
+  const allowed = patch ? new Set(['caption', 'aesthetic_id', 'visibility', 'garment_ids'])
+    : new Set(['source_ootd_id', 'caption', 'aesthetic_id', 'weather_code', 'temperature_c', 'visibility', 'garment_ids']);
   if (!hasOnlyKeys(b, allowed) || patch && Object.keys(b).length < 1 || !patch &&
       (!Object.hasOwn(b, 'caption') || !Object.hasOwn(b, 'aesthetic_id') || b.visibility !== 'private')) return { error: validation(requestId) };
+  // garment_ids may be omitted only when importing an OOTD (its items are linked automatically).
+  if (Object.hasOwn(b, 'garment_ids') && !validGarmentIds(b.garment_ids) ||
+      !patch && !Object.hasOwn(b, 'garment_ids') && typeof b.source_ootd_id !== 'string') return { error: validation(requestId) };
   if (Object.hasOwn(b, 'caption') && (typeof b.caption !== 'string' || b.caption.length > 2000 || b.caption.includes('\0')) ||
       Object.hasOwn(b, 'aesthetic_id') && (typeof b.aesthetic_id !== 'string' || !UUID.test(b.aesthetic_id)) ||
       Object.hasOwn(b, 'source_ootd_id') && !(b.source_ootd_id === null || typeof b.source_ootd_id === 'string' && UUID.test(b.source_ootd_id)) ||
@@ -170,7 +190,8 @@ export async function createFeedPostResponse(req, d) {
   const parsed = postBody(req, d.requestId, false); if (parsed.error) return parsed.error; const key = idempotencyKey(req); if (!key) return validation(d.requestId);
   const auth = await authenticatedUser(req, d); if (auth.error) return auth.error; const b = parsed.data;
   const write = await auth.client.rpc('create_my_feed_post', { p_source_ootd_id: b.source_ootd_id ?? null, p_caption: b.caption,
-    p_aesthetic_id: b.aesthetic_id.toLowerCase(), p_weather_code: b.weather_code ?? null, p_temperature_c: b.temperature_c ?? null, p_idempotency_key: key });
+    p_aesthetic_id: b.aesthetic_id.toLowerCase(), p_weather_code: b.weather_code ?? null, p_temperature_c: b.temperature_c ?? null, p_idempotency_key: key,
+    p_garment_ids: b.garment_ids?.map(value => value.toLowerCase()) ?? null });
   if (write.error) return write.error; const id = write.data?.post_id; if (!UUID.test(id ?? '')) return failure(500, 'INTERNAL_ERROR', d.requestId);
   const post = await projectOne(auth, id, d, 500); return post.error ?? { status: 201, headers: baseHeaders(d.requestId), body: post.data };
 }
@@ -179,7 +200,8 @@ export async function updateFeedPostResponse(req, d) {
   const auth = await authenticatedUser(req, d); if (auth.error) return auth.error; const b = parsed.data;
   const write = await auth.client.rpc('update_my_feed_post', { p_post_id: id, p_has_caption: Object.hasOwn(b, 'caption'), p_caption: b.caption ?? null,
     p_has_aesthetic_id: Object.hasOwn(b, 'aesthetic_id'), p_aesthetic_id: b.aesthetic_id ?? null,
-    p_has_visibility: Object.hasOwn(b, 'visibility'), p_visibility: b.visibility ?? null }); if (write.error) return write.error;
+    p_has_visibility: Object.hasOwn(b, 'visibility'), p_visibility: b.visibility ?? null,
+    p_has_garment_ids: Object.hasOwn(b, 'garment_ids'), p_garment_ids: b.garment_ids?.map(value => value.toLowerCase()) ?? null }); if (write.error) return write.error;
   const post = await projectOne(auth, id, d, 500); return post.error ?? { status: 200, headers: baseHeaders(d.requestId), body: post.data };
 }
 export async function deleteFeedPostResponse(req, d) {

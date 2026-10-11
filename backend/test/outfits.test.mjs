@@ -17,7 +17,7 @@ const bottomAssetId = '99999999-9999-4999-8999-999999999999';
 const env = { SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'publishable-test' };
 const savedRow = { id: savedId, title: 'Office', note: null, source_recommendation_id: null, version: 1, created_at: '2026-10-01T01:00:00.000Z' };
 const ootdRow = { id: ootdId, worn_on: '2026-10-01', saved_outfit_id: savedId, outfit_id: null, wear_status: 'worn', note: null,
-  rating: 5, weather_snapshot_id: null, version: 1, created_at: '2026-10-01T02:00:00.000Z', visibility: 'private',
+  rating: 5, weather_snapshot_id: null, version: 1, created_at: '2026-10-01T02:00:00.000Z', visibility: 'private', photo_object_key: null,
   item_snapshot: [{ garment_id: topId, category: 'top', unavailable: false }, { garment_id: bottomId, category: 'bottom', unavailable: false }] };
 
 function response(status, body, headers = {}) { return { status, headers: { get: name => headers[name.toLowerCase()] ?? null }, async json() { return body; } }; }
@@ -96,6 +96,47 @@ test('OOTD delete requires idempotency and statistics accept only the safe aggre
   const deleted = await invoke(ootdItem, async (url) => auth(url) ?? response(200, { ootd_id: ootdId, replayed: false }),
     { method: 'DELETE', query: { ootdId }, headers: { 'idempotency-key': 'delete-one' } });
   assert.equal(deleted.statusCode, 204); assert.equal(deleted.ended, true);
-  const stats = await invoke(statistics, async (url) => auth(url) ?? response(200, { as_of: '2026-10-01', wear_counts: [{ garment_id: topId, count: 2 }], unworn_30_days: [bottomId], ignored: 'x' }));
-  assert.deepEqual(stats.body, { as_of: '2026-10-01', wear_counts: [{ garment_id: topId, count: 2 }], unworn_30_days: [bottomId] });
+  const stats = await invoke(statistics, async (url) => auth(url) ?? response(200, { as_of: '2026-10-01', wear_counts: [{ garment_id: topId, count: 2 }], unworn_30_days: [bottomId], ignored: 'x',
+    aesthetic_totals: [], top_aesthetic: null }));
+  assert.deepEqual(stats.body, { as_of: '2026-10-01', wear_counts: [{ garment_id: topId, count: 2 }], unworn_30_days: [bottomId],
+    top_aesthetic: null, aesthetic_totals: [] });
+});
+
+test('OOTD create/patch carry the selected photo upload and reads return only a signed photo URL', async () => {
+  const uploadId = 'ABABABAB-ABAB-4BAB-8BAB-ABABABABABAB';
+  const photoKey = `${userId}/ootd_photo/${uploadId.toLowerCase()}.jpg`;
+  const bodies = {};
+  const network = async (url, options) => { const a = auth(url); if (a) return a; const value = String(url);
+    if (value.includes('/rpc/create_my_ootd_with_photo')) { bodies.create = JSON.parse(options.body); return response(200, { ootd_id: ootdId, replayed: false }); }
+    if (value.includes('/rpc/update_my_ootd_with_photo')) { bodies.update = JSON.parse(options.body); return response(200, { ootd_id: ootdId, version: 2 }); }
+    if (value.includes('/storage/v1/object/sign/ootd-private')) {
+      bodies.sign = JSON.parse(options.body);
+      return response(200, [{ path: photoKey, signedURL: `/storage/v1/object/sign/ootd-private/${photoKey}?token=t` }]);
+    }
+    if (value.includes('/rest/v1/ootd_entries')) return response(200, [{ ...ootdRow, photo_object_key: photoKey }]);
+    if (value.includes('/rest/v1/garment_assets')) return response(200, [{ id: topAssetId }, { id: bottomAssetId }]);
+    if (value.includes('/rest/v1/garments')) return response(200, [{ id: topId, asset_id: topAssetId }, { id: bottomId, asset_id: bottomAssetId }]);
+    assert.fail(`unexpected ${value}`); };
+  const created = await invoke(ootdCollection, network, { method: 'POST', headers: { 'idempotency-key': 'ootd-photo' },
+    body: { worn_on: '2026-10-01', garment_ids: [topId, bottomId], wear_status: 'worn', rating: 4, photo_upload_id: uploadId } });
+  assert.equal(created.statusCode, 201);
+  assert.equal(bodies.create.p_photo_upload_id, uploadId.toLowerCase());
+  assert.deepEqual(bodies.sign.paths, [photoKey]);
+  assert.match(created.body.photo.url, /^https:\/\/abcdefghijklmnopqrst\.supabase\.co\/storage\/v1\/object\/sign\/ootd-private\//);
+  assert.equal(JSON.stringify(created.body).includes('photo_object_key'), false);
+
+  const patched = await invoke(ootdItem, network, { method: 'PATCH', query: { ootdId }, body: { expected_version: 1, photo_upload_id: null } });
+  assert.equal(patched.statusCode, 200);
+  assert.equal(bodies.update.p_has_photo_upload_id, true); assert.equal(bodies.update.p_photo_upload_id, null);
+  assert.equal(bodies.update.p_has_note, false);
+
+  const plain = await invoke(ootdItem, network, { method: 'PATCH', query: { ootdId }, body: { expected_version: 2, note: 'x' } });
+  assert.equal(plain.statusCode, 200); assert.equal(bodies.update.p_has_photo_upload_id, false);
+
+  const invalid = await invoke(ootdCollection, async () => assert.fail('network'), { method: 'POST', headers: { 'idempotency-key': 'ootd-photo-bad' },
+    body: { worn_on: '2026-10-01', garment_ids: [topId], wear_status: 'worn', photo_upload_id: 'not-a-uuid' } });
+  assert.equal(invalid.statusCode, 422);
+  const foreign = await invoke(ootdItem, async (url) => auth(url) ?? response(200, [{ ...ootdRow, photo_object_key: 'someone-else/ootd_photo/x.jpg' }]),
+    { query: { ootdId } });
+  assert.equal(foreign.statusCode, 500);
 });

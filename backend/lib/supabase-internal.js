@@ -204,6 +204,25 @@ export function createInternalClient({ env, request = fetch, requestId }) {
       }
       if (message.startsWith('invalid_')) return { error: failure(422, 'VALIDATION_ERROR', requestId) };
       return { error: failure(503, 'SUPABASE_UNAVAILABLE', requestId, true) };
+    },
+    // DELETE /me (track B, 2026-10-10): purge every public row + queue Storage objects. Idempotent.
+    async purgeAccountData(userId) {
+      const url = new URL('/rest/v1/rpc/purge_account_data', base);
+      const response = await call(url, { method: 'POST', headers: { ...internalHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_user_id: userId }) });
+      if (!response) return { error: failure(503, 'SUPABASE_UNAVAILABLE', requestId, true) };
+      let payload; try { payload = await response.json(); } catch { payload = null; }
+      if (response.status === 200 && payload && typeof payload === 'object' && payload.user_id === userId &&
+          typeof payload.profile_deleted === 'boolean' && Number.isInteger(payload.storage_objects_enqueued)) return { data: payload };
+      return { error: failure(503, 'ACCOUNT_DELETION_INCOMPLETE', requestId, true) };
+    },
+    // Supabase Auth Admin API. 404 = already deleted by an earlier attempt.
+    async deleteAuthUser(userId) {
+      const url = new URL(`/auth/v1/admin/users/${encodeURIComponent(userId)}`, base);
+      const response = await call(url, { method: 'DELETE', headers: internalHeaders });
+      if (!response) return { error: failure(503, 'AUTH_UNAVAILABLE', requestId, true) };
+      if ([200, 204, 404].includes(response.status)) return { data: { deleted: response.status !== 404 } };
+      return { error: failure(503, 'ACCOUNT_DELETION_INCOMPLETE', requestId, true) };
     }
   };
 }

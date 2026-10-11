@@ -9,6 +9,8 @@ const postId = '33333333-3333-4333-8333-333333333333';
 const jobId = '44444444-4444-4444-8444-444444444444';
 const garmentId = '55555555-5555-4555-8555-555555555555';
 const mediaId = '66666666-6666-4666-8666-666666666666';
+const itemId = '77777777-7777-4777-8777-777777777777';
+const itemTwo = '88888888-8888-4888-8888-888888888888';
 const env = { SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'publishable-test' };
 
 function response(status, body, headers = {}) {
@@ -23,11 +25,11 @@ function invoke(create, request, { method = 'GET', query = {}, body, headers = {
   return create({ env, request, createRequestId: () => requestId })(req, res);
 }
 function projected(status = 'queued', overrides = {}) {
-  const base = { id: jobId, post_id: postId, status, matches: [], model_version: null, coverage: null, error: null };
-  if (status === 'succeeded') Object.assign(base, { matches: [{ source_item_key: `media:${mediaId}`, garment_id: garmentId,
-    similarity: 0.75, reason: `model echoed media:${mediaId}` }], model_version: 'mimic-v1', coverage: 1 });
-  if (status === 'no_match') Object.assign(base, { matches: [{ source_item_key: `media:${mediaId}`, garment_id: null,
-    similarity: null, reason: 'none' }], model_version: 'mimic-v1', coverage: 0 });
+  const base = { id: jobId, post_id: postId, status, matches: [], model_version: null, coverage: null, grade: null, error: null };
+  if (status === 'succeeded') Object.assign(base, { matches: [{ source_item_key: `item:${itemId}`, post_item_id: itemId, category: 'top',
+    garment_id: garmentId, grade: 'high', reason: `model echoed item:${itemId}` }], model_version: 'rule-v1', coverage: 1, grade: 'high' });
+  if (status === 'no_match') Object.assign(base, { matches: [{ source_item_key: `item:${itemId}`, post_item_id: itemId, category: 'bag',
+    garment_id: null, grade: null, reason: 'none' }], model_version: 'rule-v1', coverage: 0 });
   if (status === 'failed') Object.assign(base, { error: { code: 'WORKER_TIMEOUT', message: 'retry later', retryable: true } });
   return { ...base, ...overrides };
 }
@@ -43,14 +45,18 @@ test('create uses exact idempotent RPC arguments and returns queued 202', async 
   assert.deepEqual(JSON.parse(calls[1].options.body), { p_post_id: postId, p_idempotency_key: 'mimic-one' });
 });
 
-test('get supports every safe terminal projection and hides the feed media identifier', async () => {
+test('get supports every safe terminal projection and hides raw source keys', async () => {
   for (const status of ['queued', 'running', 'succeeded', 'no_match', 'failed']) {
     const result = await invoke(getMimic, async url => auth(url) ? response(200, { id: userId }) : response(200, projected(status)),
       { query: { jobId } });
     assert.equal(result.statusCode, 200, status); assert.equal(result.body.status, status);
-    assert.equal(JSON.stringify(result.body).includes(mediaId), false);
+    assert.equal(JSON.stringify(result.body).includes(`item:${itemId}`), false);
     assert.equal(JSON.stringify(result.body).includes('model echoed'), false);
-    if (['succeeded', 'no_match'].includes(status)) assert.equal(result.body.matches[0].source_item_key, 'source-1');
+    if (['succeeded', 'no_match'].includes(status)) {
+      assert.equal(result.body.matches[0].source_item_key, 'source-1'); assert.equal(result.body.matches[0].post_item_id, itemId);
+    }
+    assert.equal(result.body.grade, status === 'succeeded' ? 'high' : null);
+    if (status === 'no_match') assert.equal(result.body.matches[0].grade, null);
     if (status === 'failed') assert.equal(result.body.error.request_id, requestId);
   }
 });
@@ -60,7 +66,11 @@ test('malformed inputs fail before auth and unknown or unsafe projection fields 
     headers: { 'idempotency-key': 'short' }, body: { post_id: postId, status: 'queued' } });
   assert.equal(invalid.statusCode, 422);
   for (const row of [projected('succeeded', { lease_token: 'secret' }), projected('succeeded', { coverage: 2 }),
-    projected('succeeded', { matches: [{ source_item_key: `media:${mediaId}`, garment_id: garmentId, similarity: NaN, reason: 'x' }] })]) {
+    projected('succeeded', { matches: [{ source_item_key: `item:${itemId}`, post_item_id: itemId, category: 'top', garment_id: garmentId, grade: 'great', reason: 'x' }] }),
+    projected('succeeded', { matches: [{ source_item_key: `item:${itemId}`, post_item_id: itemId, category: 'dress', garment_id: garmentId, grade: 'medium', reason: 'x' }] }),
+    projected('succeeded', { matches: [{ source_item_key: `item:${itemId}`, garment_id: garmentId, grade: 'medium', reason: 'x' }] }),
+    projected('succeeded', { matches: [{ source_item_key: `item:${itemId}`, post_item_id: itemId, category: 'top', garment_id: garmentId, grade: 'high', similarity: 0.9, reason: 'x' }] }),
+    projected('succeeded', { grade: null }), projected('no_match', { grade: 'low' })]) {
     const result = await invoke(getMimic, async url => auth(url) ? response(200, { id: userId }) : response(200, row), { query: { jobId } });
     assert.equal(result.statusCode, 500);
   }
@@ -84,4 +94,19 @@ test('GET rejects extra query and body before any network request', async () => 
   assert.equal(extra.statusCode, 400);
   const body = await invoke(getMimic, async () => assert.fail('network'), { query: { jobId }, body: {} });
   assert.equal(body.statusCode, 400);
+});
+
+test('grades only: no numeric similarity reaches the client; legacy media rows still parse', async () => {
+  const row = projected('succeeded', { coverage: 0.5, grade: 'low', matches: [
+    { source_item_key: `item:${itemId}`, post_item_id: itemId, category: 'top', garment_id: garmentId, grade: 'high', reason: 'a' },
+    { source_item_key: `item:${itemTwo}`, post_item_id: itemTwo, category: 'bottom', garment_id: null, grade: null, reason: 'b' }] });
+  const result = await invoke(getMimic, async url => auth(url) ? response(200, { id: userId }) : response(200, row), { query: { jobId } });
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(result.body.matches.map(item => [item.category, item.grade]), [['top', 'high'], ['bottom', null]]);
+  assert.equal(result.body.grade, 'low'); assert.equal(JSON.stringify(result.body).includes('similarity'), false);
+  const legacy = projected('succeeded', { matches: [{ source_item_key: `media:${mediaId}`, post_item_id: null, category: null,
+    garment_id: garmentId, grade: 'medium', reason: 'x' }], grade: 'medium' });
+  const old = await invoke(getMimic, async url => auth(url) ? response(200, { id: userId }) : response(200, legacy), { query: { jobId } });
+  assert.equal(old.statusCode, 200); assert.equal(old.body.grade, 'medium'); assert.equal(old.body.matches[0].post_item_id, null);
+  assert.equal(JSON.stringify(old.body).includes(mediaId), false);
 });

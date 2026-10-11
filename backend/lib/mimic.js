@@ -8,8 +8,12 @@ const MODEL = /^[A-Za-z0-9._:-]{1,100}$/;
 const STATUSES = new Set(['queued', 'running', 'succeeded', 'no_match', 'failed']);
 const FAILURE_CODES = new Set(['DEADLINE_EXCEEDED', 'ATTEMPTS_EXHAUSTED', 'SOURCE_UNAVAILABLE',
   'CANDIDATE_SNAPSHOT_CHANGED', 'MODEL_UNAVAILABLE', 'WORKER_TIMEOUT', 'MIMIC_FAILED']);
-const RESULT_KEYS = new Set(['id', 'post_id', 'status', 'matches', 'model_version', 'coverage', 'error']);
-const MATCH_KEYS = new Set(['source_item_key', 'garment_id', 'similarity', 'reason']);
+const RESULT_KEYS = new Set(['id', 'post_id', 'status', 'matches', 'model_version', 'coverage', 'grade', 'error']);
+const MATCH_KEYS = new Set(['source_item_key', 'post_item_id', 'category', 'garment_id', 'grade', 'reason']);
+const CATEGORIES = new Set(['outerwear', 'top', 'bottom', 'shoes', 'bag', 'accessory']);
+// Display grades only (2026-10-10 decision: 높음·보통·낮음). Scores stay internal; thresholds live in
+// SQL g10_mimic_grade (high >= 0.75, medium >= 0.5, else low; overall = mean over linked items).
+const GRADES = new Set(['high', 'medium', 'low']);
 const ERROR_KEYS = new Set(['code', 'message', 'retryable']);
 
 function validation(requestId, status = 422) { return failure(status, 'VALIDATION_ERROR', requestId); }
@@ -34,6 +38,7 @@ function resultDto(value, requestId) {
   const waiting = value.status === 'queued' || value.status === 'running';
   const terminal = value.status === 'succeeded' || value.status === 'no_match';
   if (waiting && (value.matches.length !== 0 || value.model_version !== null || value.coverage !== null || value.error !== null)) return null;
+  if (!(value.status === 'succeeded' ? GRADES.has(value.grade) : value.grade === null)) return null;
   if (terminal && (value.matches.length < 1 || !MODEL.test(value.model_version ?? '') ||
       typeof value.coverage !== 'number' || !Number.isFinite(value.coverage) || value.coverage < 0 || value.coverage > 1 || value.error !== null)) return null;
   if (value.status === 'failed' && (value.matches.length !== 0 || value.model_version !== null || value.coverage !== null ||
@@ -43,20 +48,21 @@ function resultDto(value, requestId) {
   const rawKeys = new Set();
   for (const [index, item] of value.matches.entries()) {
     if (!exact(item, MATCH_KEYS) || typeof item.source_item_key !== 'string' || item.source_item_key.length < 1 ||
-        rawKeys.has(item.source_item_key) || !cleanText(item.reason, 500)) return null;
+        rawKeys.has(item.source_item_key) || !cleanText(item.reason, 500) ||
+        !(item.post_item_id === null || UUID.test(item.post_item_id ?? '')) ||
+        !(item.category === null || CATEGORIES.has(item.category))) return null;
     rawKeys.add(item.source_item_key);
-    const unmatched = item.garment_id === null && item.similarity === null;
-    const matched = UUID.test(item.garment_id ?? '') && typeof item.similarity === 'number' &&
-      Number.isFinite(item.similarity) && item.similarity >= -1 && item.similarity <= 1;
+    const unmatched = item.garment_id === null && item.grade === null;
+    const matched = UUID.test(item.garment_id ?? '') && GRADES.has(item.grade);
     if (!unmatched && !matched) return null;
-    matches.push({ source_item_key: `source-${index + 1}`, garment_id: matched ? item.garment_id.toLowerCase() : null,
-      similarity: matched ? item.similarity : null,
+    matches.push({ source_item_key: `source-${index + 1}`, post_item_id: item.post_item_id?.toLowerCase() ?? null,
+      category: item.category, garment_id: matched ? item.garment_id.toLowerCase() : null, grade: matched ? item.grade : null,
       reason: matched ? '등록된 옷장에서 유사한 항목을 찾았습니다.' : '현재 옷장에서 적합한 항목을 찾지 못했습니다.' });
   }
   if (value.status === 'succeeded' && !matches.some(item => item.garment_id !== null)) return null;
   if (value.status === 'no_match' && (matches.some(item => item.garment_id !== null) || value.coverage !== 0)) return null;
   return { id: value.id.toLowerCase(), post_id: value.post_id.toLowerCase(), status: value.status, matches,
-    model_version: value.model_version, coverage: value.coverage,
+    model_version: value.model_version, coverage: value.coverage, grade: value.grade,
     error: value.status === 'failed' ? { ...value.error, request_id: requestId } : null };
 }
 

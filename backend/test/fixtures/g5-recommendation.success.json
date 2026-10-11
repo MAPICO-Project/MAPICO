@@ -11,12 +11,14 @@
         "77777777-7777-4777-8777-777777777777"
       ],
       "scores": { "weather": 0.8, "tpo": null, "aesthetic": 0.5, "harmony": 0.8 },
-      "reason_facts": ["temperature_band:mild", "precipitation:none", "categories:top,bottom"],
-      "explanation": "현재 날씨 구간과 선택한 카테고리 조합을 기준으로 만든 코디입니다.",
+      "reason_facts": ["temperature_band:mild", "precipitation:none", "categories:top,bottom", "selected_aesthetic:99999999-9999-4999-8999-999999999999"],
+      "explanation": "선택한 추구미와 현재 날씨 구간을 기준으로 내 옷장 아이템을 조합한 코디입니다.",
       "explanation_source": "template"
     }
   ],
   "tpo": null,
+  "selected_aesthetic_id": "99999999-9999-4999-8999-999999999999",
+  "missing_categories": ["shoes"],
   "weather": {
     "id": "44444444-4444-4444-8444-444444444444",
     "source": "kma_short_term",
@@ -33,9 +35,9 @@
     "air_quality": null,
     "is_stale": false
   },
-  "engine_version": "deterministic-g5-v1",
-  "rules_version": "weather-category-g5-v1",
-  "shortfall_reasons": [],
+  "engine_version": "deterministic-g10-v1",
+  "rules_version": "weather-category-aesthetic-g10-v1",
+  "shortfall_reasons": ["missing_category:shoes"],
   "created_at": "2026-10-01T03:05:00.000Z",
   "expires_at": "2026-10-02T03:05:00.000Z",
   "target_date": "2026-10-01"

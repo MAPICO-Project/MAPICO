@@ -38,6 +38,8 @@ export function upstreamFailure(response, requestId, source) {
   return failure(503, source === 'auth' ? 'AUTH_UNAVAILABLE' : 'SUPABASE_UNAVAILABLE', requestId, true);
 }
 
+const STORAGE_BUCKETS = new Set(['closet-private', 'feed-private', 'profile-media', 'ootd-private']);
+
 const VALIDATION_MESSAGES = new Set([
   'empty_profile_patch', 'invalid_display_name', 'invalid_timezone', 'invalid_preferences',
   'invalid_preference_count', 'duplicate_aesthetic', 'invalid_preference_weight_sum',
@@ -49,7 +51,8 @@ const VALIDATION_MESSAGES = new Set([
   'invalid_ootd_patch', 'invalid_ootd_delete', 'invalid_garment_ids', 'invalid_ootd_snapshot',
   'future_worn_not_allowed', 'recommendation_weather_mismatch', 'invalid_weather_snapshot', 'multiple_ootd_sources'
   , 'invalid_feed_post', 'invalid_feed_patch', 'invalid_caption', 'invalid_visibility', 'invalid_feed_media',
-  'invalid_feed_media_completion', 'invalid_post_id', 'invalid_mimic_request'
+  'invalid_feed_media_completion', 'invalid_post_id', 'invalid_mimic_request',
+  'invalid_aesthetic_roles', 'invalid_main_weight', 'invalid_media_upload', 'invalid_media_upload_completion'
 ]);
 
 async function rpcFailure(response, requestId) {
@@ -74,8 +77,14 @@ async function rpcFailure(response, requestId) {
   if (code === 'P0002' && message === 'ootd_not_found') return failure(404, 'OOTD_NOT_FOUND', requestId);
   if (code === 'P0002' && message === 'feed_post_not_found') return failure(404, 'FEED_POST_NOT_FOUND', requestId);
   if (code === 'P0002' && message === 'feed_media_not_found') return failure(404, 'FEED_MEDIA_NOT_FOUND', requestId);
+  if (code === 'P0002' && message === 'media_upload_not_found') return failure(404, 'MEDIA_UPLOAD_NOT_FOUND', requestId);
+  if (code === 'P0001' && message === 'media_upload_not_ready') return failure(409, 'MEDIA_UPLOAD_CONFLICT', requestId);
+  if (code === 'P0001' && message === 'too_many_open_uploads') return failure(409, 'TOO_MANY_OPEN_UPLOADS', requestId);
   if (code === 'P0002' && message === 'mimic_job_not_found') return failure(404, 'MIMIC_JOB_NOT_FOUND', requestId);
   if (code === 'P0002' && message === 'aesthetic_not_found') return failure(422, 'VALIDATION_ERROR', requestId);
+  // 2026-10-10 track B: AI analysis needs the external-AI notice; consent/calendar input errors are 422.
+  if (code === 'P0001' && message === 'ai_notice_required') return failure(403, 'AI_NOTICE_REQUIRED', requestId);
+  if (code === '22023' && ['invalid_consent', 'invalid_calendar_range'].includes(message)) return failure(422, 'VALIDATION_ERROR', requestId);
   if (code === 'P0001' && message === 'version_conflict') return failure(409, 'VERSION_CONFLICT', requestId);
   if (code === 'P0001' && message === 'idempotency_conflict') return failure(409, 'IDEMPOTENCY_CONFLICT', requestId);
   if (code === 'P0001' && message === 'too_many_open_batches') return failure(409, 'TOO_MANY_OPEN_BATCHES', requestId);
@@ -177,14 +186,17 @@ export function createUserClient({ env, token, request = fetch, requestId }) {
         'create_my_ootd', 'update_my_ootd', 'delete_my_ootd', 'get_my_closet_statistics',
         'create_my_feed_post', 'update_my_feed_post', 'delete_my_feed_post', 'create_my_feed_media',
         'complete_my_feed_media', 'like_my_feed_post', 'unlike_my_feed_post',
-        'create_my_mimic_job', 'get_my_mimic_job'
+        'create_my_mimic_job', 'get_my_mimic_job',
+        'update_my_profile_with_avatar', 'create_my_ootd_with_photo', 'update_my_ootd_with_photo',
+        'create_my_media_upload', 'complete_my_media_upload',
+        'update_my_profile_settings', 'get_my_ootd_calendar'
       ].includes(name)) {
         return Promise.resolve({ error: failure(500, 'INTERNAL_ERROR', requestId) });
       }
       return call(`/rest/v1/rpc/${name}`, 'rest', undefined, { method: 'POST', body: args, rpc: true });
     },
     async signStorage(bucket, paths, expiresIn = 300) {
-      if (!['closet-private', 'feed-private'].includes(bucket) || !Array.isArray(paths) || paths.length < 1 || paths.length > 100 ||
+      if (!STORAGE_BUCKETS.has(bucket) || !Array.isArray(paths) || paths.length < 1 || paths.length > 100 ||
           paths.some(path => typeof path !== 'string' || path.length < 1 || path.length > 1024) ||
           !Number.isInteger(expiresIn) || expiresIn < 60 || expiresIn > 3600) {
         return { error: failure(500, 'INTERNAL_ERROR', requestId) };
@@ -211,7 +223,7 @@ export function createUserClient({ env, token, request = fetch, requestId }) {
       }
     },
     async createSignedUpload(bucket, path) {
-      if (!['closet-private', 'feed-private'].includes(bucket) || typeof path !== 'string' || path.length < 1 || path.length > 1024 ||
+      if (!STORAGE_BUCKETS.has(bucket) || typeof path !== 'string' || path.length < 1 || path.length > 1024 ||
           path.split('/').some(segment => segment.length < 1 || segment === '.' || segment === '..')) {
         return { error: failure(500, 'INTERNAL_ERROR', requestId) };
       }
@@ -242,7 +254,7 @@ export function createUserClient({ env, token, request = fetch, requestId }) {
       return { data: { url: String(signed), method: 'PUT' } };
     },
     async readStoragePrefix(bucket, path, maxBytes = 65536) {
-      if (!['closet-private', 'feed-private'].includes(bucket) || typeof path !== 'string' || path.length < 1 || path.length > 1024 ||
+      if (!STORAGE_BUCKETS.has(bucket) || typeof path !== 'string' || path.length < 1 || path.length > 1024 ||
           !Number.isInteger(maxBytes) || maxBytes < 16 || maxBytes > 65536) {
         return { error: failure(500, 'INTERNAL_ERROR', requestId) };
       }

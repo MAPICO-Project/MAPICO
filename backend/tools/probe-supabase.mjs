@@ -3,8 +3,10 @@ import fs from 'node:fs/promises';
 import {createRequire} from 'node:module';
 const require=createRequire(new URL('../artifacts/design-validation/package.json',import.meta.url));
 const {Client}=require('pg');
-const root=new URL('../supabase/',import.meta.url);
-const config=await fs.readFile(new URL('general setting.txt',root),'utf8');
+import {pathToFileURL} from 'node:url';
+// Key memos live outside the repo (default: <_P-project>/_key/). Override with MAFICO_KEY_DIR.
+const root=process.env.MAFICO_KEY_DIR?pathToFileURL(process.env.MAFICO_KEY_DIR.replace(/[\\/]?$/,'/')):new URL('../../../_key/',import.meta.url);
+const config=await fs.readFile(new URL('supabase_project_settings.txt',root),'utf8');
 const ref=config.match(/project id\s*[:=]\s*([a-z0-9]{20})/i)?.[1];
 const key=config.match(/sb_publishable_[A-Za-z0-9_-]+/)?.[0];
 if(!ref||!key){console.log(JSON.stringify({parsed:false,projectRef:!!ref,publishable:!!key}));process.exit(1);}
@@ -14,7 +16,7 @@ try{
  const data=await res.json();
  console.log(JSON.stringify({restStatus:res.status,code:!res.ok?data.code:undefined,rows:Array.isArray(data)?data.length:undefined}));
 }catch(e){console.log(JSON.stringify({restError:e.name}));}
-const password=(await fs.readFile(new URL('supabse_db_security.txt',root),'utf8')).trim();
+const password=(await fs.readFile(new URL('supabase_db_password.txt',root),'utf8')).trim();
 const client=new Client({host:`db.${ref}.supabase.co`,port:5432,user:'postgres',password,database:'postgres',ssl:{rejectUnauthorized:true},connectionTimeoutMillis:10000});
 try{
  await client.connect();

@@ -129,3 +129,23 @@ test('G4 path/body/idempotency validation happens before authentication', async 
     const result = await invoke(handler, { ...options, request: async () => assert.fail('network called') }); assert.equal(result.statusCode, 422);
   }
 });
+
+test('drafts whose AI category was outside the six surface category null and only the six can be chosen', async () => {
+  const unknown = draft({ predicted_attributes: { category: null, subcategory: null }, current_attributes: { category: null, subcategory: null, note: null } });
+  const result = await invoke(listDraftsHandler, { query: { batchId }, request: async url => {
+    const value = String(url); if (auth(url)) return response(200, { id: userId });
+    if (value.includes('/rpc/list_my_garment_drafts')) return response(200, { items: [unknown] });
+    if (value.includes('/rest/v1/garment_assets')) return response(200, []);
+    assert.fail(`unexpected ${value}`);
+  } });
+  assert.equal(result.statusCode, 200); assert.equal(result.body.items[0].predicted_attributes.category, null);
+  assert.equal(result.body.items[0].current_attributes.category, null);
+  for (const category of ['dress', 'other']) {
+    const legacy = await invoke(listDraftsHandler, { query: { batchId }, request: async url => auth(url) ? response(200, { id: userId })
+      : response(200, { items: [draft({ predicted_attributes: { category, subcategory: null } })] }) });
+    assert.equal(legacy.statusCode, 500);
+    const patched = await invoke(updateDraftHandler, { method: 'PATCH', query: { draftId },
+      body: { expected_version: 1, attributes: { category } }, request: async () => assert.fail('network') });
+    assert.equal(patched.statusCode, 422);
+  }
+});

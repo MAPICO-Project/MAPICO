@@ -90,7 +90,7 @@ test('listGarments applies keyset pagination and returns only the safe signed pr
 
 test('list query and cursor validation fail before authentication', async () => {
   for (const query of [
-    { unknown: 'x' }, { limit: '0' }, { limit: '101' }, { limit: '1.5' }, { category: 'not-real' },
+    { unknown: 'x' }, { limit: '0' }, { limit: '101' }, { limit: '1.5' }, { category: 'not-real' }, { category: 'dress' }, { category: 'other' },
     { cursor: 'not-json' }, { category: ['top'] }
   ]) {
     const result = await invoke(createListHandler, { query, request: async () => assert.fail('network called') });
@@ -130,7 +130,7 @@ test('PATCH sends exact presence flags and rereads the safe DTO', async () => {
 
 test('PATCH validates exact body and maps known RPC conflicts safely', async () => {
   for (const body of [
-    {}, { expected_version: 1, attributes: {} }, { expected_version: 1, attributes: { category: 'bad' } },
+    {}, { expected_version: 1, attributes: {} }, { expected_version: 1, attributes: { category: 'bad' } }, { expected_version: 1, attributes: { category: 'dress' } }, { expected_version: 1, attributes: { category: 'other' } },
     { expected_version: 1, attributes: { note: 'x\u0000y' } },
     { expected_version: 1, attributes: { subcategory: 'x'.repeat(81) } }
   ]) {

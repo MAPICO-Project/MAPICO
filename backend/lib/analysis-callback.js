@@ -7,7 +7,8 @@ const KEYS = new Set(['event_id', 'attempt', 'status', 'model_versions', 'items'
 const ITEM_KEYS = new Set(['client_item_key', 'bbox', 'mask_object_key', 'attributes', 'confidence', 'item_index']);
 const ATTRIBUTE_KEYS = new Set(['category', 'color_hex', 'pattern', 'formality', 'activity', 'warmth', 'aesthetic_scores']);
 const ERROR_KEYS = new Set(['code', 'message', 'client_item_key']);
-const CATEGORIES = new Set(['top', 'bottom', 'outerwear', 'dress', 'shoes', 'bag', 'accessory', 'other']);
+// 2026-10-09 user decision: the user flow's six categories (아우터·상의·하의·신발·가방·액세서리).
+const CATEGORIES = new Set(['outerwear', 'top', 'bottom', 'shoes', 'bag', 'accessory']);
 const CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_BODY = 262144;
 
@@ -22,7 +23,9 @@ async function rawBody(req, supplied) {
   return Buffer.concat(chunks);
 }
 function validAttributes(value) {
-  if (!only(value, ATTRIBUTE_KEYS) || !CATEGORIES.has(value.category)) return false;
+  // Any AI label is accepted here; labels outside the six are moved aside by sixCategoryAttributes.
+  if (!only(value, ATTRIBUTE_KEYS) || typeof value.category !== 'string' ||
+      [...value.category].length < 1 || [...value.category].length > 40 || /[\u0000-\u001f\u007f]/.test(value.category)) return false;
   if (value.color_hex !== undefined && value.color_hex !== null && (typeof value.color_hex !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(value.color_hex))) return false;
   if (value.pattern !== undefined && value.pattern !== null && (typeof value.pattern !== 'string' || [...value.pattern].length > 40)) return false;
   for (const key of ['formality', 'activity', 'warmth']) if (value[key] !== undefined && value[key] !== null &&
@@ -31,6 +34,12 @@ function validAttributes(value) {
       value.aesthetic_scores.some(score => !only(score, new Set(['aesthetic_id', 'score'])) || !UUID.test(score.aesthetic_id) ||
       typeof score.score !== 'number' || !Number.isFinite(score.score) || score.score < 0 || score.score > 1))) return false;
   return true;
+}
+// A label outside the six (e.g. dress/other) is never stored as a category: the draft gets
+// category=null and keeps the label as ai_category, so the user must choose before confirming.
+function sixCategoryAttributes(attributes) {
+  if (CATEGORIES.has(attributes.category)) return attributes;
+  return { ...attributes, category: null, ai_category: attributes.category };
 }
 function validatePayload(value, pathJobId) {
   if (!only(value, KEYS) || Object.keys(value).length !== KEYS.size || !UUID.test(value.event_id) ||
@@ -137,7 +146,7 @@ export function createAnalysisCallbackHandler(dependencies = {}) {
                         items.push({ mask_object_key: item.mask_object_key, storage_object_id: fence.data.object_id.toLowerCase(),
                           storage_updated_at: fence.data.object_updated_at,
                           ...metadata, item_index: item.item_index, client_item_key: item.client_item_key, bbox: item.bbox,
-                          attributes: item.attributes, confidence: item.confidence, model_version: modelVersion });
+                          attributes: sixCategoryAttributes(item.attributes), confidence: item.confidence, model_version: modelVersion });
                       }
                       if (storageError) result = storageError;
                       else {

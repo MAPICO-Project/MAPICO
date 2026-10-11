@@ -43,5 +43,5 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`Mafico API 문서: http://${host}:${port}`);
+  console.log(`MAFICO API 문서: http://${host}:${port}`);
 });

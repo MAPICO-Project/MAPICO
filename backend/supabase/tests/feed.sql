@@ -1,11 +1,22 @@
 -- Run only against a disposable migrated database. Every fixture rolls back.
 -- Projection/idempotency evidence also exercises profiles and idempotency_keys through narrow RPCs.
+-- feed_post_items/garments link rules are asserted here through the RPCs and in feed_links_mimic.sql.
 begin;
 
 insert into auth.users(id) values
  ('77000000-0000-4000-8000-000000000001'),
  ('77000000-0000-4000-8000-000000000002');
 select set_config('test.feed_aesthetic',(select id::text from public.aesthetics where active order by id limit 1),true);
+-- 2026-10-10: posts link >=1 own closet item; the OOTD snapshot garment now exists.
+insert into public.garment_batches(id,user_id,status) values('77300000-0000-4000-8000-000000000001','77000000-0000-4000-8000-000000000001','confirmed');
+insert into public.garment_assets(id,user_id,batch_id,kind,object_key,content_type,byte_size,verified_at) values
+ ('77300000-0000-4000-8000-000000000002','77000000-0000-4000-8000-000000000001','77300000-0000-4000-8000-000000000001','cutout','77000000-0000-4000-8000-000000000001/feed/top.png','image/png',12,now());
+insert into public.analysis_jobs(id,user_id,batch_id,status,completed_at) values
+ ('77300000-0000-4000-8000-000000000003','77000000-0000-4000-8000-000000000001','77300000-0000-4000-8000-000000000001','succeeded',now());
+insert into public.garment_drafts(id,user_id,batch_id,job_id,item_index,asset_id,status,raw_prediction,model_version) values
+ ('77300000-0000-4000-8000-000000000004','77000000-0000-4000-8000-000000000001','77300000-0000-4000-8000-000000000001','77300000-0000-4000-8000-000000000003',0,'77300000-0000-4000-8000-000000000002','confirmed','{"category":"top"}','v1');
+insert into public.garments(id,user_id,source_draft_id,asset_id,category,attributes) values
+ ('77200000-0000-4000-8000-000000000001','77000000-0000-4000-8000-000000000001','77300000-0000-4000-8000-000000000004','77300000-0000-4000-8000-000000000002','top','{"category":"top"}');
 insert into public.ootd_entries(id,user_id,worn_on,visibility,item_snapshot,wear_status) values
  ('77100000-0000-4000-8000-000000000001','77000000-0000-4000-8000-000000000001',current_date-1,'private',
   '[{"garment_id":"77200000-0000-4000-8000-000000000001","category":"top","unavailable":false}]','worn');
@@ -25,20 +36,20 @@ begin
   exception when insufficient_privilege then null; end;
 
  created:=public.create_my_feed_post('77100000-0000-4000-8000-000000000001','hello',current_setting('test.feed_aesthetic')::uuid,
-  null,20,'feed-post-one');
+  null,20,'feed-post-one',null);
  replay:=public.create_my_feed_post('77100000-0000-4000-8000-000000000001','hello',current_setting('test.feed_aesthetic')::uuid,
-  'unknown',20,'feed-post-one');
+  'unknown',20,'feed-post-one',null);
  v_post_id:=(created->>'post_id')::uuid;
  if created->>'replayed'<>'false' or replay->>'replayed'<>'true' or replay->>'post_id'<>v_post_id::text
  or created?'object_key' then raise exception 'FAIL post create replay/projection'; end if;
- begin perform public.create_my_feed_post(null,'changed',current_setting('test.feed_aesthetic')::uuid,'clear',null,'feed-post-one');
+ begin perform public.create_my_feed_post(null,'changed',current_setting('test.feed_aesthetic')::uuid,'clear',null,'feed-post-one',array['77200000-0000-4000-8000-000000000001'::uuid]);
   raise exception 'FAIL post idempotency conflict'; exception when raise_exception then if sqlerrm<>'idempotency_conflict' then raise; end if; end;
  if not exists(select 1 from public.feed_posts where id=v_post_id and visibility='private' and weather_code='unknown')
  then raise exception 'FAIL private draft/default weather'; end if;
  begin perform source_ootd_id from public.feed_posts where id=v_post_id; raise exception 'FAIL source OOTD column exposed';
   exception when insufficient_privilege then null; end;
 
- begin perform public.update_my_feed_post(v_post_id,false,null,false,null,true,'public');
+ begin perform public.update_my_feed_post(v_post_id,false,null,false,null,true,'public',false,null);
   raise exception 'FAIL public without media'; exception when raise_exception then if sqlerrm<>'feed_media_required' then raise; end if; end;
  created:=public.create_my_feed_media(v_post_id,'image/jpeg',3,'feed-media-one');
  replay:=public.create_my_feed_media(v_post_id,'image/jpeg',3,'feed-media-one');
@@ -59,13 +70,13 @@ begin
  if completed->>'invalid'<>'false' or completed->>'replayed'<>'false'
  or public.complete_my_feed_media(v_post_id,media_id,'feed-complete-one','valid',storage_id,storage_updated)->>'replayed'<>'true'
  then raise exception 'FAIL media complete replay'; end if;
- perform public.update_my_feed_post(v_post_id,false,null,false,null,true,'public');
+ perform public.update_my_feed_post(v_post_id,false,null,false,null,true,'public',false,null);
  if not exists(select 1 from public.feed_posts where id=v_post_id and visibility='public') then raise exception 'FAIL publish'; end if;
  perform public.like_my_feed_post(v_post_id); perform public.like_my_feed_post(v_post_id);
  if (select count(*) from public.post_likes pl where pl.user_id=auth.uid() and pl.post_id=v_post_id)<>1
  then raise exception 'FAIL duplicate own like'; end if;
 
- created:=public.create_my_feed_post(null,'limit',current_setting('test.feed_aesthetic')::uuid,'clear',null,'feed-limit-post');
+ created:=public.create_my_feed_post(null,'limit',current_setting('test.feed_aesthetic')::uuid,'clear',null,'feed-limit-post',array['77200000-0000-4000-8000-000000000001'::uuid]);
  limit_post:=(created->>'post_id')::uuid;
  for i in 1..10 loop
   perform public.create_my_feed_media(limit_post,'image/png',8,'feed-limit-'||lpad(i::text,2,'0'));
@@ -73,7 +84,7 @@ begin
  begin perform public.create_my_feed_media(limit_post,'image/png',8,'feed-limit-11');
   raise exception 'FAIL feed media max ten'; exception when raise_exception then if sqlerrm<>'feed_media_limit' then raise; end if; end;
 
- created:=public.create_my_feed_post(null,'invalid',current_setting('test.feed_aesthetic')::uuid,'rain',12,'feed-invalid-post');
+ created:=public.create_my_feed_post(null,'invalid',current_setting('test.feed_aesthetic')::uuid,'rain',12,'feed-invalid-post',array['77200000-0000-4000-8000-000000000001'::uuid]);
  invalid_post:=(created->>'post_id')::uuid;
  created:=public.create_my_feed_media(invalid_post,'image/png',8,'feed-invalid-media');
  invalid_media:=(created->>'media_id')::uuid;
@@ -95,7 +106,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub','77000000-0000-4000-8000-000000000002',true);
 do $$ begin
  begin perform public.create_my_feed_post('77100000-0000-4000-8000-000000000001','cross',current_setting('test.feed_aesthetic')::uuid,
-  'clear',null,'feed-cross-post'); raise exception 'FAIL cross owner OOTD source';
+  'clear',null,'feed-cross-post',null); raise exception 'FAIL cross owner OOTD source';
   exception when no_data_found then null; end;
  if not exists(select 1 from public.feed_posts where id=current_setting('test.feed_post')::uuid)
  then raise exception 'FAIL public feed not visible'; end if;
@@ -115,13 +126,15 @@ do $$ declare projected jsonb; begin
  if jsonb_array_length(projected)<>1 or projected->0?'source_ootd_id' or projected->0?'garment_ids'
  or projected->0->>'liked_by_me'<>'true' or (projected->0->>'like_count')::integer<>2
  or projected->0->'media'->0->>'object_key'<>current_setting('test.feed_object')
+ or jsonb_array_length(projected->0->'linked_items')<>1 or projected->0->'linked_items'->0->>'category'<>'top'
+ or projected->0->'linked_items'->0?'garment_id' or projected::text like '%77200000-0000-4000-8000-000000000001%'
  then raise exception 'FAIL service-only safe projection'; end if;
 end $$;
 reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','77000000-0000-4000-8000-000000000001',true);
-select public.update_my_feed_post(current_setting('test.feed_post')::uuid,false,null,false,null,true,'private');
+select public.update_my_feed_post(current_setting('test.feed_post')::uuid,false,null,false,null,true,'private',false,null);
 reset role;
 
 set local role authenticated;
@@ -141,7 +154,7 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','77000000-0000-4000-8000-000000000001',true);
-select public.update_my_feed_post(current_setting('test.feed_post')::uuid,false,null,false,null,true,'public');
+select public.update_my_feed_post(current_setting('test.feed_post')::uuid,false,null,false,null,true,'public',false,null);
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','77000000-0000-4000-8000-000000000002',true);

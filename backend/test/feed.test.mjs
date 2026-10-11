@@ -16,11 +16,14 @@ const mediaId = '55555555-5555-4555-8555-555555555555';
 const storageId = '88888888-8888-4888-8888-888888888888';
 const aestheticId = '66666666-6666-4666-8666-666666666666';
 const objectKey = `${userId}/${postId}/${mediaId}.png`;
+const garmentId = '99999999-9999-4999-8999-999999999999';
+const linkId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const env = { SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'publishable-test',
   SUPABASE_SECRET_KEY: 'service-role-secret-key-for-tests' };
 const rawPost = { id: postId, author: { id: authorId, display_name: 'A' }, caption: 'look', aesthetic_id: aestheticId,
   weather_code: 'unknown', temperature_c: null, visibility: 'public', liked_by_me: false, like_count: 2,
-  created_at: '2026-10-01T03:00:00.000Z', media: [{ bucket_id: 'feed-private', object_key: objectKey, position: 0 }] };
+  created_at: '2026-10-01T03:00:00.000Z', media: [{ bucket_id: 'feed-private', object_key: objectKey, position: 0 }],
+  linked_items: [{ id: linkId, position: 0, category: 'top' }] };
 const privatePost = { ...rawPost, author: { id: userId, display_name: null }, visibility: 'private', media: [] };
 
 function response(status, body, headers = {}, bytes) {
@@ -65,11 +68,13 @@ test('private post create, detail, update and delete use narrow RPCs and safe pr
     if (value.includes('/rpc/delete_my_feed_post')) return response(200, { id: postId, status: 'deletion_pending' });
     assert.fail(`unexpected ${value}`); };
   const created = await invoke(feedCollection, request, { method: 'POST', headers: { 'idempotency-key': 'feed-post-one' },
-    body: { caption: 'look', aesthetic_id: aestheticId, visibility: 'private' } });
+    body: { caption: 'look', aesthetic_id: aestheticId, visibility: 'private', garment_ids: [garmentId.toUpperCase()] } });
   assert.equal(created.statusCode, 201); assert.equal(calls[0].p_weather_code, null); assert.equal(created.body.author.id, userId);
+  assert.deepEqual(calls[0].p_garment_ids, [garmentId]); assert.deepEqual(created.body.linked_items, [{ id: linkId, position: 0, category: 'top' }]);
   const detail = await invoke(feedItem, request, { query: { postId } }); assert.equal(detail.statusCode, 200);
   const updated = await invoke(feedItem, request, { method: 'PATCH', query: { postId }, body: { caption: 'new' } });
   assert.equal(updated.statusCode, 200); assert.equal(calls[1].p_has_caption, true); assert.equal(calls[1].p_has_visibility, false);
+  assert.equal(calls[1].p_has_garment_ids, false); assert.equal(calls[1].p_garment_ids, null);
   const deleted = await invoke(feedItem, request, { method: 'DELETE', query: { postId } });
   assert.deepEqual(deleted.body, { id: postId, status: 'deletion_pending' });
 });
@@ -124,4 +129,60 @@ test('like and unlike are bodyless 204 and archive/list projections stay visibil
   }
   const liked = await invoke(likedPosts, request); const mine = await invoke(myPosts, request);
   assert.equal(liked.statusCode, 200); assert.equal(mine.statusCode, 200); assert.equal(liked.body.items[0].id, postId);
+});
+
+test('feed weather accepts wind for create, filter and projection; unknown codes fail before network', async () => {
+  const windPost = { ...privatePost, weather_code: 'wind' };
+  const calls = [];
+  const request = async (url, options = {}) => { const value = String(url); const a = auth(url); if (a) return a;
+    if (value.includes('/rpc/project_feed_posts')) return response(200, [windPost]);
+    if (value.includes('/rpc/create_my_feed_post')) { calls.push(JSON.parse(options.body)); return response(200, { post_id: postId }); }
+    if (value.includes('/rest/v1/feed_posts')) { calls.push(new URL(value).searchParams.getAll('weather_code')); return response(200, [{ id: postId, created_at: rawPost.created_at }]); }
+    assert.fail(`unexpected ${value}`); };
+  const created = await invoke(feedCollection, request, { method: 'POST', headers: { 'idempotency-key': 'feed-wind-one' },
+    body: { caption: 'windy', aesthetic_id: aestheticId, weather_code: 'wind', temperature_c: 12, visibility: 'private', garment_ids: [garmentId] } });
+  assert.equal(created.statusCode, 201); assert.equal(calls[0].p_weather_code, 'wind'); assert.equal(created.body.weather_code, 'wind');
+  const page = await invoke(feedCollection, request, { query: { weather_code: 'wind' } });
+  assert.equal(page.statusCode, 200); assert.deepEqual(calls[1], ['eq.wind']);
+  for (const options of [{ method: 'POST', headers: { 'idempotency-key': 'feed-storm-one' }, body: { caption: 'x', aesthetic_id: aestheticId, weather_code: 'storm', visibility: 'private', garment_ids: [garmentId] } },
+    { query: { weather_code: 'storm' } }]) {
+    const rejected = await invoke(feedCollection, async () => assert.fail('network'), options);
+    assert.ok([400, 422].includes(rejected.statusCode));
+  }
+});
+
+test('linked items: >=1 own item required, OOTD import may omit them, edits never empty, projection hides closet ids', async () => {
+  const calls = [];
+  const request = async (url, options = {}) => { const value = String(url); const a = auth(url); if (a) return a;
+    if (value.includes('/rpc/create_my_feed_post') || value.includes('/rpc/update_my_feed_post')) { calls.push(JSON.parse(options.body)); return response(200, { post_id: postId }); }
+    if (value.includes('/rpc/project_feed_posts')) return response(200, [privatePost]);
+    assert.fail(`unexpected ${value}`); };
+  const base = { caption: 'x', aesthetic_id: aestheticId, visibility: 'private' };
+  for (const body of [base, { ...base, garment_ids: [] }, { ...base, garment_ids: [garmentId, garmentId] },
+    { ...base, garment_ids: Array.from({ length: 11 }, (_, i) => `99999999-9999-4999-8999-${String(i).padStart(12, '0')}`) },
+    { ...base, garment_ids: ['not-a-uuid'] }, { ...base, source_ootd_id: null }]) {
+    const rejected = await invoke(feedCollection, async () => assert.fail('network'), { method: 'POST', headers: { 'idempotency-key': 'feed-link-bad' }, body });
+    assert.equal(rejected.statusCode, 422, JSON.stringify(body));
+  }
+  const fromOotd = await invoke(feedCollection, request, { method: 'POST', headers: { 'idempotency-key': 'feed-link-ootd' },
+    body: { ...base, source_ootd_id: mediaId } });
+  assert.equal(fromOotd.statusCode, 201); assert.equal(calls[0].p_garment_ids, null); assert.equal(calls[0].p_source_ootd_id, mediaId);
+  for (const garment_ids of [[], null]) {
+    const rejected = await invoke(feedItem, async () => assert.fail('network'), { method: 'PATCH', query: { postId }, body: { garment_ids } });
+    assert.equal(rejected.statusCode, 422);
+  }
+  const relinked = await invoke(feedItem, request, { method: 'PATCH', query: { postId }, body: { garment_ids: [garmentId] } });
+  assert.equal(relinked.statusCode, 200); assert.equal(calls[1].p_has_garment_ids, true); assert.deepEqual(calls[1].p_garment_ids, [garmentId]);
+  assert.equal(JSON.stringify(relinked.body).includes(garmentId), false);
+  for (const [upstream, status, code] of [[{ code: 'P0002', message: 'garment_not_found' }, 404, 'GARMENT_NOT_FOUND'],
+    [{ code: '22023', message: 'invalid_garment_ids' }, 422, 'VALIDATION_ERROR'], [{ code: 'P0001', message: 'invalid_feed_state' }, 409, 'FEED_CONFLICT']]) {
+    const result = await invoke(feedCollection, async url => auth(url) ?? response(400, upstream), { method: 'POST',
+      headers: { 'idempotency-key': 'feed-link-err' }, body: { ...base, garment_ids: [garmentId] } });
+    assert.equal(result.statusCode, status); assert.equal(result.body.error.code, code);
+  }
+  for (const linked_items of [undefined, [{ id: linkId, position: 0, category: 'dress' }], [{ id: linkId, position: 10, category: 'top' }]]) {
+    const bad = { ...privatePost, linked_items }; if (linked_items === undefined) delete bad.linked_items;
+    const result = await invoke(feedItem, async url => auth(url) ?? (String(url).includes('/rest/v1/feed_posts') ? response(200, [{ id: postId }]) : response(200, [bad])), { query: { postId } });
+    assert.equal(result.statusCode, 500);
+  }
 });

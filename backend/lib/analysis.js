@@ -11,7 +11,8 @@ const RETRYABLE_ANALYSIS_ERRORS = new Set([
   'WORKER_TIMEOUT', 'MODEL_UNAVAILABLE', 'STORAGE_UNAVAILABLE', 'INTERNAL_ERROR', 'CALLBACK_TIMEOUT'
 ]);
 const DRAFT_STATUSES = new Set(['predicted', 'edited', 'confirmed', 'rejected']);
-const CATEGORIES = new Set(['top', 'bottom', 'outerwear', 'dress', 'shoes', 'bag', 'accessory', 'other']);
+// 2026-10-09 user decision: the user flow's six categories (아우터·상의·하의·신발·가방·액세서리).
+const CATEGORIES = new Set(['outerwear', 'top', 'bottom', 'shoes', 'bag', 'accessory']);
 const PATCH_KEYS = new Set(['expected_version', 'attributes']);
 const ATTRIBUTE_KEYS = new Set(['category', 'subcategory', 'note']);
 const CONFIRM_KEYS = new Set(['draft_ids', 'draft_versions']);
@@ -50,7 +51,8 @@ async function readJob(client, userId, jobId, requestId) {
   return job ? { data: job } : { error: failure(500, 'INTERNAL_ERROR', requestId) };
 }
 function safeAttributes(value, requireNote) {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || !CATEGORIES.has(value.category) ||
+  // category null = AI label outside the six; the user must pick one before confirming.
+  if (!value || typeof value !== 'object' || Array.isArray(value) || (value.category !== null && !CATEGORIES.has(value.category)) ||
       (value.subcategory !== null && (typeof value.subcategory !== 'string' || codePoints(value.subcategory) > 80)) ||
       (requireNote && value.note !== null && (typeof value.note !== 'string' || codePoints(value.note) > 1000))) return null;
   return requireNote ? { category: value.category, subcategory: value.subcategory, note: value.note }

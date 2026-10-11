@@ -11,8 +11,12 @@
     "preferences": [
       {
         "aesthetic_id": "33333333-3333-4333-8333-333333333333",
+        "role": "main",
         "weight": 1
       }
-    ]
+    ],
+    "ai_notice_accepted_at": null,
+    "training_consent": false,
+    "avatar": null
   }
 }

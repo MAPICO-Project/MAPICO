@@ -7,8 +7,11 @@
     "default_tpo": null,
     "onboarding_completed": true,
     "preferences": [
-      { "aesthetic_id": "33333333-3333-4333-8333-333333333333", "weight": 1 }
-    ]
+      { "aesthetic_id": "33333333-3333-4333-8333-333333333333", "role": "main", "weight": 1 }
+    ],
+    "ai_notice_accepted_at": null,
+    "training_consent": false,
+    "avatar": null
   },
   "onboarding": { "knows_aesthetic": null, "tutorial_seen": true, "completed": true }
 }

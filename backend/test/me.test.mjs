@@ -47,7 +47,9 @@ function successFetch(calls, profileOverrides = {}) {
       timezone: 'Asia/Seoul',
       default_tpo: null,
       onboarding_completed: false,
-      preferences: [{ aesthetic_id: aestheticId, weight: 1 }],
+      avatar_object_key: null,
+      preferences: [{ aesthetic_id: aestheticId, role: 'main', weight: 1 }],
+      ai_notice_accepted_at: null,
       training_consent: true,
       created_at: 'private',
       ...profileOverrides
@@ -69,7 +71,7 @@ test('rejects unsupported methods and malformed authorization before network', a
     assert.equal(called, false);
     assert.equal(result.statusCode, input.method === 'POST' ? 405 : 401);
     assert.equal(result.headers['X-Request-Id'], requestId);
-    if (input.method === 'POST') assert.equal(result.headers.Allow, 'GET, HEAD, PATCH');
+    if (input.method === 'POST') assert.equal(result.headers.Allow, 'GET, HEAD, PATCH, DELETE');
     else assert.equal(result.headers['WWW-Authenticate'], 'Bearer');
   }
 });
@@ -124,7 +126,10 @@ test('returns only the Profile allowlist and keeps the user JWT under RLS', asyn
     timezone: 'Asia/Seoul',
     default_tpo: null,
     onboarding_completed: false,
-    preferences: [{ aesthetic_id: aestheticId, weight: 1 }]
+    preferences: [{ aesthetic_id: aestheticId, role: 'main', weight: 1 }],
+    ai_notice_accepted_at: null,
+    training_consent: true,
+    avatar: null
   });
   assert.equal(calls.length, 2);
   for (const call of calls) {
@@ -137,7 +142,7 @@ test('returns only the Profile allowlist and keeps the user JWT under RLS', asyn
   assert.equal(restUrl.searchParams.get('id'), `eq.${userId}`);
   assert.match(restUrl.searchParams.get('select'), /preferences:user_aesthetic_preferences/);
   assert.equal(JSON.stringify(result).includes('private@example.com'), false);
-  assert.equal(JSON.stringify(result).includes('training_consent'), false);
+  assert.equal(JSON.stringify(result).includes('created_at'), false);
 });
 
 test('maps profile absence and schema failures', async () => {
@@ -155,7 +160,11 @@ test('rejects malformed or over-cardinality profile data', async () => {
   const invalidRows = [
     { preferences: [{ aesthetic_id: aestheticId, weight: '1' }] },
     { preferences: [{ aesthetic_id: aestheticId, weight: 1.5 }] },
-    { preferences: Array.from({ length: 4 }, () => ({ aesthetic_id: aestheticId, weight: 0.25 })) }
+    { preferences: Array.from({ length: 4 }, () => ({ aesthetic_id: aestheticId, weight: 0.25 })) },
+    { preferences: [{ aesthetic_id: aestheticId, weight: 1 }] },
+    { preferences: [{ aesthetic_id: aestheticId, role: 'sub', weight: 1 }] },
+    { preferences: [{ aesthetic_id: aestheticId, role: 'main', weight: 0.5 }, { aesthetic_id: aestheticId, role: 'main', weight: 0.5 }] },
+    { avatar_object_key: 'someone-else/avatar/x.png' }
   ];
   for (const overrides of invalidRows) {
     const result = await invoke({ request: successFetch([], overrides) });

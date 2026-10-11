@@ -34,7 +34,7 @@ function invoke(createHandler, { method, body, contentType = 'application/json',
 
 function profile() {
   return { id: userId, display_name: '새 이름', timezone: 'UTC', default_tpo: null,
-    onboarding_completed: false, preferences: [] };
+    onboarding_completed: false, ai_notice_accepted_at: null, training_consent: false, avatar_object_key: null, preferences: [] };
 }
 
 test('PATCH /me sends all presence arguments, accepts void 204 and re-reads the Profile with the user JWT', async () => {
@@ -42,16 +42,19 @@ test('PATCH /me sends all presence arguments, accepts void 204 and re-reads the 
   const request = async (url, options) => {
     calls.push({ url: String(url), options });
     if (String(url).includes('/auth/v1/user')) return response(200, { id: userId, private: true });
-    if (String(url).includes('/rpc/update_my_profile')) return response(204);
+    if (String(url).includes('/rpc/update_my_profile_settings')) return response(204);
     return response(200, [profile()]);
   };
   const result = await invoke(createMeHandler, { method: 'PATCH', body: { display_name: null, timezone: 'UTC' }, request });
   assert.equal(result.statusCode, 200);
-  assert.deepEqual(result.body, { ...profile(), display_name: '새 이름' });
+  const { avatar_object_key: _avatarKey, ...expected } = profile();
+  assert.deepEqual(result.body, { ...expected, avatar: null });
   assert.equal(calls.length, 3);
   assert.equal(calls[1].options.method, 'POST');
   assert.deepEqual(JSON.parse(calls[1].options.body), {
-    p_set_display_name: true, p_display_name: null, p_set_timezone: true, p_timezone: 'UTC'
+    p_set_display_name: true, p_display_name: null, p_set_timezone: true, p_timezone: 'UTC',
+    p_set_avatar: false, p_avatar_upload_id: null,
+    p_accept_ai_notice: false, p_set_training_consent: false, p_training_consent: null
   });
   assert.equal(calls[1].options.headers.Authorization, `Bearer ${token}`);
   assert.equal(calls[2].options.headers.Authorization, `Bearer ${token}`);
@@ -87,19 +90,19 @@ test('PUT preferences normalizes UUIDs, rejects duplicates and returns the safe 
     calls.push({ url: String(url), options });
     if (String(url).includes('/auth/')) return response(200, { id: userId });
     if (String(url).includes('/rpc/')) return response(200, null);
-    return response(200, [{ aesthetic_id: aestheticId.toLowerCase(), weight: 1 }]);
+    return response(200, [{ aesthetic_id: aestheticId.toLowerCase(), role: 'main', weight: 1 }]);
   };
   const result = await invoke(createPreferencesHandler, {
-    method: 'PUT', body: { preferences: [{ aesthetic_id: aestheticId, weight: 1 }] }, request
+    method: 'PUT', body: { preferences: [{ aesthetic_id: aestheticId, role: 'main', weight: 1 }] }, request
   });
   assert.equal(result.statusCode, 200);
-  assert.deepEqual(result.body, { preferences: [{ aesthetic_id: aestheticId.toLowerCase(), weight: 1 }] });
+  assert.deepEqual(result.body, { preferences: [{ aesthetic_id: aestheticId.toLowerCase(), role: 'main', weight: 1 }] });
   assert.deepEqual(JSON.parse(calls[1].options.body), {
-    p_preferences: [{ aesthetic_id: aestheticId.toLowerCase(), weight: 1 }]
+    p_preferences: [{ aesthetic_id: aestheticId.toLowerCase(), role: 'main', weight: 1 }]
   });
   const duplicate = await invoke(createPreferencesHandler, {
     method: 'PUT', body: { preferences: [
-      { aesthetic_id: aestheticId, weight: 0.5 }, { aesthetic_id: aestheticId.toLowerCase(), weight: 0.5 }
+      { aesthetic_id: aestheticId, role: 'main', weight: 0.5 }, { aesthetic_id: aestheticId.toLowerCase(), role: 'sub', weight: 0.5 }
     ] }, request: async () => assert.fail('network called')
   });
   assert.equal(duplicate.statusCode, 422);

@@ -48,8 +48,8 @@ do $$ begin
  exception when invalid_parameter_value then if sqlerrm<>'invalid_timezone' then raise; end if; end;
 
  perform public.replace_my_aesthetic_preferences('[
-  {"aesthetic_id":"71000000-0000-4000-8000-000000000001","weight":0.7},
-  {"aesthetic_id":"71000000-0000-4000-8000-000000000002","weight":0.3}
+  {"aesthetic_id":"71000000-0000-4000-8000-000000000001","role":"main","weight":0.7},
+  {"aesthetic_id":"71000000-0000-4000-8000-000000000002","role":"sub","weight":0.3}
  ]');
  if (select count(*) from public.user_aesthetic_preferences where user_id=auth.uid())<>2
  or (select sum(weight) from public.user_aesthetic_preferences where user_id=auth.uid())<>1
@@ -58,17 +58,17 @@ do $$ begin
  begin perform public.replace_my_aesthetic_preferences('[]'); raise exception 'FAIL zero preferences';
  exception when invalid_parameter_value then if sqlerrm<>'invalid_preference_count' then raise; end if; end;
  begin perform public.replace_my_aesthetic_preferences('[
-  {"aesthetic_id":"71000000-0000-4000-8000-000000000001","weight":0.5},
-  {"aesthetic_id":"71000000-0000-4000-8000-000000000001","weight":0.5}
+  {"aesthetic_id":"71000000-0000-4000-8000-000000000001","role":"main","weight":0.5},
+  {"aesthetic_id":"71000000-0000-4000-8000-000000000001","role":"sub","weight":0.5}
  ]'); raise exception 'FAIL duplicate preference';
  exception when invalid_parameter_value then if sqlerrm<>'duplicate_aesthetic' then raise; end if; end;
  begin perform public.replace_my_aesthetic_preferences('[
-  {"aesthetic_id":"71000000-0000-4000-8000-000000000001","weight":0.8},
-  {"aesthetic_id":"71000000-0000-4000-8000-000000000002","weight":0.3}
+  {"aesthetic_id":"71000000-0000-4000-8000-000000000001","role":"main","weight":0.8},
+  {"aesthetic_id":"71000000-0000-4000-8000-000000000002","role":"sub","weight":0.3}
  ]'); raise exception 'FAIL invalid weight sum';
  exception when invalid_parameter_value then if sqlerrm<>'invalid_preference_weight_sum' then raise; end if; end;
  begin perform public.replace_my_aesthetic_preferences('[
-  {"aesthetic_id":"71000000-0000-4000-8000-000000000004","weight":1}
+  {"aesthetic_id":"71000000-0000-4000-8000-000000000004","role":"main","weight":1}
  ]'); raise exception 'FAIL inactive preference';
  exception when invalid_parameter_value then if sqlerrm<>'inactive_or_unknown_aesthetic' then raise; end if; end;
  if (select count(*) from public.user_aesthetic_preferences where user_id=auth.uid())<>2

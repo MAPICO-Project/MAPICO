@@ -51,10 +51,12 @@
       "preferences": [
         {
           "aesthetic_id": "81000000-0000-4000-8000-000000000001",
+          "role": "main",
           "weight": 0.7
         },
         {
           "aesthetic_id": "81000000-0000-4000-8000-000000000002",
+          "role": "sub",
           "weight": 0.3
         }
       ]

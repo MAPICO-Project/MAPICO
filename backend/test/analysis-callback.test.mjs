@@ -96,3 +96,24 @@ test('missing internal secrets fail closed and are never returned', async () => 
     { setHeader(k, v) { result.headers[k] = v; }, status(v) { result.statusCode = v; return this; }, json(v) { result.body = v; return result; } });
   assert.equal(result.statusCode, 503); assert.equal(JSON.stringify(result).includes('SECRET'), false);
 });
+
+test('AI labels outside the six categories reach the RPC as category null plus ai_category', async () => {
+  for (const label of ['dress', 'other']) {
+    const calls = [];
+    const value = payload({ items: [{ ...payload().items[0], attributes: { category: label, color_hex: '#000000' } }] });
+    const result = await invoke({ value, request: successRequest(calls) });
+    assert.equal(result.statusCode, 200);
+    const rpc = JSON.parse(calls[3].options.body);
+    assert.deepEqual(rpc.p_items[0].attributes, { category: null, ai_category: label, color_hex: '#000000' });
+  }
+  const calls = []; await invoke({ request: successRequest(calls) });
+  assert.deepEqual(JSON.parse(calls[3].options.body).p_items[0].attributes, { category: 'top' });
+  for (const category of [undefined, null, '', 'x'.repeat(41), 'bad\u0000label', 3]) {
+    const attributes = category === undefined ? {} : { category };
+    const value = payload({ items: [{ ...payload().items[0], attributes }] });
+    const result = await invoke({ value, request: async () => assert.fail('network') });
+    assert.equal(result.statusCode, 422);
+  }
+  const spoofed = payload({ items: [{ ...payload().items[0], attributes: { category: 'top', ai_category: 'dress' } }] });
+  assert.equal((await invoke({ value: spoofed, request: async () => assert.fail('network') })).statusCode, 422);
+});

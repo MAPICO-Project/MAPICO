@@ -43,24 +43,24 @@ do $$ declare r1 jsonb; r2 jsonb; r jsonb; begin
   exception when insufficient_privilege then null; end;
  begin perform public.accept_outfit(gen_random_uuid(),current_date); raise exception 'FAIL legacy accept exposed';
   exception when insufficient_privilege then null; end;
- r1:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-one',repeat('a',64),'engine-v1','rules-v1');
- r2:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-one',repeat('a',64),'engine-v1','rules-v1');
+ r1:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-one',repeat('a',64),'engine-v1','rules-v1',null);
+ r2:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-one',repeat('a',64),'engine-v1','rules-v1',null);
  if r1->>'replayed'<>'false' or r2->>'replayed'<>'true' or r2->>'in_progress'<>'true'
  or r2?'reservation_token' or r1->>'request_id'<>r2->>'request_id'
  then raise exception 'FAIL recommendation reservation replay'; end if;
  perform set_config('test.initial_token_one',r1->>'reservation_token',true);
- begin perform public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-one',repeat('b',64),'engine-v1','rules-v1');
+ begin perform public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-one',repeat('b',64),'engine-v1','rules-v1',null);
   raise exception 'FAIL reservation idempotency conflict'; exception when raise_exception then if sqlerrm<>'idempotency_conflict' then raise; end if; end;
- r:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-two',repeat('c',64),'engine-v1','rules-v1');
+ r:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-two',repeat('c',64),'engine-v1','rules-v1',null);
  perform set_config('test.token_two',r->>'reservation_token',true);
- r:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-invalid',repeat('d',64),'engine-v1','rules-v1');
+ r:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-invalid',repeat('d',64),'engine-v1','rules-v1',null);
  perform set_config('test.token_bad',r->>'reservation_token',true);
- r:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),2,'recommend-dupe',repeat('f',64),'engine-v1','rules-v1');
+ r:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),2,'recommend-dupe',repeat('f',64),'engine-v1','rules-v1',null);
  perform set_config('test.token_dupe',r->>'reservation_token',true);
 end $$;
 select set_config('request.jwt.claim.sub','74000000-0000-4000-8000-000000000002',true);
 do $$ declare r jsonb; begin
- r:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-other',repeat('e',64),'engine-v1','rules-v1');
+ r:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-other',repeat('e',64),'engine-v1','rules-v1',null);
  perform set_config('test.token_other',r->>'reservation_token',true);
 end $$;
 reset role;
@@ -70,7 +70,7 @@ update public.recommendation_requests set reservation_lease_expires_at=now()-int
 set local role authenticated;
 select set_config('request.jwt.claim.sub','74000000-0000-4000-8000-000000000001',true);
 do $$ declare resumed jsonb; begin
- resumed:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-one',repeat('a',64),'engine-v1','rules-v1');
+ resumed:=public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-one',repeat('a',64),'engine-v1','rules-v1',null);
  if resumed->>'resumed'<>'true' or resumed->>'in_progress'<>'false'
  or resumed->>'reservation_token'=current_setting('test.initial_token_one') then raise exception 'FAIL expired reservation resume'; end if;
  perform set_config('test.token_one',resumed->>'reservation_token',true);
@@ -155,8 +155,11 @@ do $$ declare recommendation_one uuid; recommendation_two uuid; recommendation_o
  then raise exception 'FAIL same outfit different key replay'; end if;
  begin perform public.accept_my_recommendation(recommendation_two,outfit_two,current_date,'accept-one');
   raise exception 'FAIL accept idempotency conflict'; exception when raise_exception then if sqlerrm<>'idempotency_conflict' then raise; end if; end;
- begin perform public.accept_my_recommendation(recommendation_two,outfit_two,current_date,'accept-two');
-  raise exception 'FAIL OOTD date conflict'; exception when raise_exception then if sqlerrm<>'ootd_date_conflict' then raise; end if; end;
+ -- 2026-10-10: a different outfit on the same day adds a second record instead of conflicting.
+ perform set_config('test.second_accept',public.accept_my_recommendation(recommendation_two,outfit_two,current_date,'accept-two')->>'ootd_id',true);
+ if current_setting('test.second_accept')=accepted->>'ootd_id'
+ or (select count(*) from public.ootd_entries where user_id=auth.uid() and worn_on=current_date)<>2
+ then raise exception 'FAIL same-day second acceptance'; end if;
 end $$;
 reset role;
 update public.recommendation_requests set expires_at=now()-interval '1 second'
@@ -188,4 +191,26 @@ do $$ begin
  if not exists(select 1 from public.recommendation_requests where weather_was_stale=false and preference_snapshot='[]')
  then raise exception 'FAIL recommendation finalized state'; end if;
 end $$;
+-- 2026-10-10 chip: the selected aesthetic is checked against the caller's own
+-- user_aesthetic_preferences (role main/sub, FK aesthetics); another member's preferences and
+-- garment_aesthetic_scores stay invisible under RLS.
+insert into public.user_aesthetic_preferences(user_id,aesthetic_id,weight,role)
+ select '74000000-0000-4000-8000-000000000002',id,1,'main' from public.aesthetics where code='minimal';
+insert into public.garment_aesthetic_scores(user_id,garment_id,aesthetic_id,score,model_version)
+ select '74000000-0000-4000-8000-000000000002','74500000-0000-4000-8000-000000000003',id,0.9,'fixture' from public.aesthetics where code='minimal';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','74000000-0000-4000-8000-000000000001',true);
+do $$ declare other_chip uuid; begin
+ select id into other_chip from public.aesthetics where code='minimal';
+ if exists(select 1 from public.user_aesthetic_preferences where user_id='74000000-0000-4000-8000-000000000002')
+ then raise exception 'FAIL cross-owner aesthetic preferences visible'; end if;
+ if exists(select 1 from public.garment_aesthetic_scores where user_id='74000000-0000-4000-8000-000000000002')
+ then raise exception 'FAIL cross-owner aesthetic scores visible'; end if;
+ begin perform public.begin_my_recommendation(60,127,date_trunc('hour',now()),1,'recommend-chip-x',repeat('9',64),'engine-v1','rules-v1',other_chip);
+  raise exception 'FAIL chip outside own preferences accepted'; exception when invalid_parameter_value then
+  if sqlerrm<>'invalid_recommendation' then raise; end if; end;
+ begin insert into public.user_aesthetic_preferences(user_id,aesthetic_id,weight,role) values(auth.uid(),other_chip,1,'main');
+  raise exception 'FAIL direct preference write'; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
 rollback;

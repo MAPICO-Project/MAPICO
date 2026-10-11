@@ -31,7 +31,7 @@ function successRequest() { return async (url, options) => { const value = Strin
     in_progress: false, reservation_token: reservationToken, lease_expires_at: '2026-10-01T03:07:00.000Z' });
   if (value.includes('/rpc/find_weather_snapshot')) return response(200, weatherRow);
   if (value.includes('/rest/v1/garments')) return response(200, [{ id: topId, category: 'top' }, { id: bottomId, category: 'bottom' }]);
-  if (value.includes('/rest/v1/user_aesthetic_preferences')) return response(200, [{ aesthetic_id: aestheticId, weight: 1 }]);
+  if (value.includes('/rest/v1/user_aesthetic_preferences')) return response(200, [{ aesthetic_id: aestheticId, weight: 1, role: 'main' }]);
   if (value.includes('/rest/v1/garment_aesthetic_scores')) return response(200, [
     { garment_id: topId, aesthetic_id: aestheticId, score: 0.9 }, { garment_id: bottomId, aesthetic_id: aestheticId, score: 0.7 }]);
   if (value.includes('/rpc/store_recommendation')) return response(200, { recommendation_id: recommendationId, replayed: false });
@@ -85,4 +85,106 @@ test('recommendation accept rejects impossible calendar dates before authenticat
     query: { recommendationId }, headers: { 'idempotency-key': 'accept-invalid' },
     body: { outfit_id: outfitId, worn_on: '2026-02-31' } });
   assert.equal(result.statusCode, 422);
+});
+
+// 2026-10-10 track C: home aesthetic chip, wardrobe sufficiency (2 garments), region selection.
+const subAestheticId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'; const otherAestheticId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const top2Id = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'; const shoesId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+function scenario({ garments, preferences = [{ aesthetic_id: aestheticId, weight: 0.6, role: 'main' },
+  { aesthetic_id: subAestheticId, weight: 0.4, role: 'sub' }], scores = [], requestOverride = {} }) {
+  const captured = { calls: [] }; const base = successRequest();
+  const request = async (url, options) => { const value = String(url); captured.calls.push(value);
+    if (value.includes('/rpc/begin_my_recommendation')) captured.begin = JSON.parse(options.body);
+    if (value.includes('/rpc/store_recommendation')) captured.store = JSON.parse(options.body);
+    if (value.includes('/rest/v1/garments')) return response(200, garments);
+    if (value.includes('/rest/v1/user_aesthetic_preferences')) return response(200, preferences);
+    if (value.includes('/rest/v1/garment_aesthetic_scores')) return response(200, scores);
+    if (value.includes('/rest/v1/recommendation_requests')) return response(200, [{ ...requestRow, ...requestOverride }]);
+    return base(url, options); };
+  return { captured, request };
+}
+const create = (request, body) => invoke(createRecommendation, request, { method: 'POST', headers: { 'idempotency-key': 'recommend-c' }, body });
+
+test('home chip: default is main, a selected sub outranks it, and the choice is reserved and hashed', async () => {
+  const garments = [{ id: topId, category: 'top' }, { id: top2Id, category: 'top' }, { id: bottomId, category: 'bottom' }];
+  const scores = [{ garment_id: topId, aesthetic_id: aestheticId, score: 0.9 }, { garment_id: topId, aesthetic_id: subAestheticId, score: 0.1 },
+    { garment_id: top2Id, aesthetic_id: aestheticId, score: 0.1 }, { garment_id: top2Id, aesthetic_id: subAestheticId, score: 0.9 }];
+  const main = scenario({ garments, scores }); const mainResult = await create(main.request, { location: { lat: 37.45, lon: 127.12 }, requested_count: 1 });
+  assert.equal(mainResult.statusCode, 201); assert.equal(main.captured.begin.p_selected_aesthetic_id, aestheticId);
+  assert.ok(main.captured.store.p_outfits[0].items.some(item => item.garment_id === topId));
+  assert.ok(main.captured.store.p_outfits[0].reason_facts.includes(`selected_aesthetic:${aestheticId}`));
+  const sub = scenario({ garments, scores }); await create(sub.request, { location: { lat: 37.45, lon: 127.12 }, requested_count: 1, aesthetic_id: subAestheticId });
+  assert.equal(sub.captured.begin.p_selected_aesthetic_id, subAestheticId);
+  assert.ok(sub.captured.store.p_outfits[0].items.some(item => item.garment_id === top2Id));
+  assert.notEqual(sub.captured.begin.p_request_hash, main.captured.begin.p_request_hash);
+});
+
+test('home chip outside the user preferences is a validation error before reservation', async () => {
+  const { captured, request } = scenario({ garments: [] });
+  const result = await create(request, { location: { lat: 37.45, lon: 127.12 }, aesthetic_id: otherAestheticId });
+  assert.equal(result.statusCode, 422); assert.equal(captured.begin, undefined);
+  const malformed = await create(request, { location: { lat: 37.45, lon: 127.12 }, aesthetic_id: 'minimal' });
+  assert.equal(malformed.statusCode, 422);
+  const tpo = await create(request, { location: { lat: 37.45, lon: 127.12 }, tpo: 'office_business' });
+  assert.equal(tpo.statusCode, 422);
+});
+
+test('wardrobe of 1 garment is insufficient: no outfits and explicit reasons', async () => {
+  const { captured, request } = scenario({ garments: [{ id: topId, category: 'top' }] });
+  await create(request, { location: { lat: 37.45, lon: 127.12 } });
+  assert.deepEqual(captured.store.p_outfits, []);
+  assert.deepEqual(captured.store.p_shortfall_reasons, ['insufficient_wardrobe', 'missing_category:bottom', 'missing_category:shoes']);
+});
+
+test('wardrobe of 2 garments without a bottom still yields an outfit and names the missing parts', async () => {
+  const { captured, request } = scenario({ garments: [{ id: topId, category: 'top' }, { id: shoesId, category: 'shoes' }] });
+  await create(request, { location: { lat: 37.45, lon: 127.12 } });
+  assert.equal(captured.store.p_outfits.length, 1);
+  assert.deepEqual(captured.store.p_outfits[0].items.map(item => item.garment_id), [topId, shoesId]);
+  assert.deepEqual(captured.store.p_shortfall_reasons, ['missing_category:bottom', 'requested_count_not_reached']);
+});
+
+test('wardrobe of 3 garments returns as many distinct outfits as possible (fewer than 3) with a reason', async () => {
+  const { captured, request } = scenario({ garments: [{ id: topId, category: 'top' }, { id: top2Id, category: 'top' },
+    { id: bottomId, category: 'bottom' }] });
+  await create(request, { location: { lat: 37.45, lon: 127.12 }, requested_count: 3 });
+  assert.equal(captured.store.p_outfits.length, 2);
+  assert.equal(new Set(captured.store.p_outfits.map(outfit => outfit.items.map(item => item.garment_id).sort().join(','))).size, 2);
+  assert.deepEqual(captured.store.p_shortfall_reasons, ['missing_category:shoes', 'requested_count_not_reached']);
+});
+
+test('recommendation accepts a province region code instead of coordinates', async () => {
+  const { captured, request } = scenario({ garments: [{ id: topId, category: 'top' }, { id: bottomId, category: 'bottom' }] });
+  const result = await create(request, { location: { region_code: 'seoul' } });
+  assert.equal(result.statusCode, 201); assert.equal(captured.begin.p_grid_x, 60); assert.equal(captured.begin.p_grid_y, 91);
+  for (const location of [{ region_code: 'tokyo' }, { region_code: 'seoul', lat: 37.5, lon: 127 }, {}]) {
+    const bad = await create(async () => assert.fail('network'), { location });
+    assert.equal(bad.statusCode, 422);
+  }
+});
+
+test('recommendation projection exposes the selected chip and parsed missing categories', async () => {
+  const { request } = scenario({ garments: [], requestOverride: { selected_aesthetic_id: subAestheticId,
+    shortfall_reasons: ['missing_category:bottom', 'requested_count_not_reached'] } });
+  const result = await invoke(getRecommendation, request, { query: { recommendationId } });
+  assert.equal(result.statusCode, 200); assert.equal(result.body.selected_aesthetic_id, subAestheticId);
+  assert.deepEqual(result.body.missing_categories, ['bottom']);
+  const legacy = scenario({ garments: [], requestOverride: { shortfall_reasons: ['missing_complete_base_outfit'] } });
+  const legacyResult = await invoke(getRecommendation, legacy.request, { query: { recommendationId } });
+  assert.equal(legacyResult.body.selected_aesthetic_id, null); assert.deepEqual(legacyResult.body.missing_categories, []);
+});
+
+test('two garments of one category never produce a one-item outfit and fall back to shortfall reasons', async () => {
+  const bag2Id = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+  for (const garments of [[{ id: topId, category: 'bag' }, { id: bag2Id, category: 'bag' }],
+    [{ id: topId, category: 'top' }, { id: top2Id, category: 'top' }]]) {
+    const { captured, request } = scenario({ garments });
+    await create(request, { location: { lat: 37.45, lon: 127.12 } });
+    assert.deepEqual(captured.store.p_outfits, []);
+    assert.equal(captured.store.p_shortfall_reasons[0], 'insufficient_wardrobe');
+    assert.ok(captured.store.p_shortfall_reasons.includes('missing_category:bottom'));
+  }
+  const { captured, request } = scenario({ garments: [{ id: topId, category: 'top' }, { id: bag2Id, category: 'bag' }] });
+  await create(request, { location: { lat: 37.45, lon: 127.12 } });
+  assert.deepEqual(captured.store.p_outfits.map(outfit => outfit.items.length), [2]);
 });

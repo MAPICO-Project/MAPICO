@@ -3,9 +3,9 @@ begin;
 insert into auth.users(id) values('00000000-0000-0000-0000-000000000001'),('00000000-0000-0000-0000-000000000002');
 insert into public.aesthetics(id,code,label,definition,version) values
  ('01000000-0000-0000-0000-000000000001','fixture_one','Fixture One','RLS fixture only','fixture-v1');
-insert into public.user_aesthetic_preferences(user_id,aesthetic_id,weight) values
- ('00000000-0000-0000-0000-000000000001','01000000-0000-0000-0000-000000000001',1),
- ('00000000-0000-0000-0000-000000000002','01000000-0000-0000-0000-000000000001',1);
+insert into public.user_aesthetic_preferences(user_id,aesthetic_id,weight,role) values
+ ('00000000-0000-0000-0000-000000000001','01000000-0000-0000-0000-000000000001',1,'main'),
+ ('00000000-0000-0000-0000-000000000002','01000000-0000-0000-0000-000000000001',1,'main');
 insert into public.garment_batches(id,user_id,status) values
  ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001','processing'),
  ('10000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000002','uploaded');

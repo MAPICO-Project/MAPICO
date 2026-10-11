@@ -66,3 +66,26 @@ test('weather rejects unsupported locations before auth and fails closed without
   });
   assert.equal(unavailable.statusCode, 503); assert.equal(unavailable.body.error.code, 'WEATHER_UNAVAILABLE');
 });
+
+test('weather accepts a province region code (location permission denied) and maps it to that grid', async () => {
+  let rpcBody; const result = await invoke(async (url, options) => {
+    if (String(url).includes('/auth/v1/user')) return response(200, { id: userId });
+    if (String(url).includes('/rpc/find_weather_snapshot')) { rpcBody = JSON.parse(options.body);
+      return response(200, { ...snapshot(), grid_x: rpcBody.p_grid_x, grid_y: rpcBody.p_grid_y }); }
+    assert.fail(`unexpected ${url}`);
+  }, { region_code: 'jeju' });
+  assert.equal(result.statusCode, 200); assert.deepEqual([rpcBody.p_grid_x, rpcBody.p_grid_y], [50, 10]);
+});
+
+test('weather requires exactly one of lat+lon or region_code', async () => {
+  for (const query of [{}, { region_code: 'tokyo' }, { region_code: 'seoul', lat: '37.5', lon: '127' }, { lat: '37.5' }]) {
+    const result = await invoke(async () => assert.fail('network'), query);
+    assert.equal(result.statusCode, 422); assert.equal(result.body.error.code, 'VALIDATION_ERROR');
+  }
+});
+
+test('every province region code maps inside the supported weather grid', async () => {
+  const { REGIONS, weatherGrid } = await import('../lib/weather.js');
+  assert.equal(Object.keys(REGIONS).length, 17);
+  for (const value of Object.values(REGIONS)) assert.ok(weatherGrid(value.lat, value.lon));
+});

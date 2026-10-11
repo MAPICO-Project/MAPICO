@@ -2,9 +2,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "마피코(MyFit:Core) API — 최신 PRD 설계",
+    "title": "마피코(MAFICO) API — 최신 PRD 설계",
     "version": "0.3.0",
-    "description": "2026-09-28 PRD 기준 계약. G1~G8의 49개 operation은 로컬 구현·검증됐고 requestAccountDeletion 1개만 계획 상태다. hosted Supabase Auth/Storage, 실제 worker와 배포 통합은 미검증이다."
+    "description": "2026-09-28 PRD 기준 계약에 2026-10-09 유저플로우 정렬(추구미 메인/보조, 피드 날씨 wind, OOTD 선택 사진, 프로필 이미지)을 반영했다. 53개 operation 모두 로컬 구현·검증됐다(2026-10-10 하루 OOTD 여러 건·고지 동의·회원 탈퇴 반영). hosted Supabase Auth/Storage, 실제 worker와 배포 통합은 미검증이다."
   },
   "servers": [
     {
@@ -55,6 +55,9 @@
     },
     {
       "name": "Onboarding"
+    },
+    {
+      "name": "Media"
     }
   ],
   "paths": {
@@ -109,7 +112,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "description": "GET/HEAD와 PATCH 로컬 구현. Supabase Auth /user 검증 후 사용자 JWT와 RLS로 본인 프로필을 조회한다. DELETE와 hosted Supabase 통합은 미구현·미검증.",
+        "description": "GET/HEAD·PATCH·DELETE 로컬 구현. Supabase Auth /user 검증 후 사용자 JWT와 RLS로 본인 프로필을 조회한다. 응답에 외부 AI 고지 동의 시각과 학습 동의 값을 포함한다. hosted Supabase 통합은 미검증.",
         "x-implementation-status": "implemented-local"
       },
       "patch": {
@@ -173,22 +176,35 @@
           }
         },
         "x-implementation-status": "implemented-local",
-        "description": "표시명·시간대를 strict body allowlist로 검증하고 사용자 JWT로 narrow RPC를 호출한 뒤 같은 JWT/RLS로 Profile을 재조회한다. avatar_asset_id는 Storage 계약 전까지 422 UNSUPPORTED_FIELD다. hosted 검증은 미완료."
+        "description": "표시명·시간대·프로필 이미지(avatar_upload_id)·외부 AI 고지 동의(ai_notice_accepted=true)·학습 동의(training_consent)를 strict body allowlist로 검증하고 사용자 JWT로 narrow RPC(update_my_profile_settings)를 한 트랜잭션으로 호출한 뒤 같은 JWT/RLS로 Profile을 재조회한다. avatar_asset_id는 422 UNSUPPORTED_FIELD다. hosted 검증은 미완료."
       },
       "delete": {
         "operationId": "requestAccountDeletion",
         "tags": [
           "Profile"
         ],
-        "summary": "탈퇴 및 데이터 파기 요청",
-        "x-implementation-status": "planned",
+        "summary": "회원 탈퇴(계정·데이터 전부 삭제)",
+        "x-implementation-status": "implemented-local",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "responses": {
           "202": {
-            "description": "계획된 성공 응답",
+            "description": "DB 데이터 삭제와 인증 사용자 삭제 완료. Storage 객체는 정리 대기열(storage_cleanup_queue)에 들어가 deletion_pending.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DeleteAccepted"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
@@ -198,12 +214,6 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "409": {
-            "$ref": "#/components/responses/Conflict"
           },
           "422": {
             "$ref": "#/components/responses/ValidationError"
@@ -218,12 +228,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/IdempotencyKey"
-          }
-        ],
-        "description": "최근 인증 요구(401/403). 즉시 접근정지 후 DB/Storage/파생/worker/공유자료 정리; 삭제 오케스트레이터 미구현."
+        "description": "2026-10-10 결정: 전부 삭제. ① 사용자 JWT 확인 ② 서버 전용 키로 purge_account_data RPC: 프로필·추구미·옷장(배치·자산·분석 작업·초안·의류·추구미 점수·임베딩)·추천·OOTD·보관함·피드 게시물(미디어·연결 아이템)·내가 누른 좋아요·내 게시물에 남이 누른 좋아요·따라입기(내 요청과 내 게시물 대상 남의 요청)·업로드 기록·멱등 키를 지우고 Storage 객체 경로를 정리 대기열에 넣는다 ③ Supabase Auth Admin API로 auth 사용자 삭제(404는 이미 삭제로 성공 처리). 각 단계가 멱등이라 503(retryable)이면 같은 요청을 다시 보내면 된다. auth 사용자까지 지워진 뒤의 재시도는 토큰이 무효라 401이다. 최근 재인증 요구와 Storage 정리 worker는 미구현. hosted Auth Admin·Storage 동작은 미검증."
       }
     },
     "/aesthetics": {
@@ -345,13 +350,13 @@
         "tags": [
           "Profile"
         ],
-        "summary": "선호 추구미 1~3개 교체",
+        "summary": "추구미 메인 1 + 보조 0~2 교체",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Preferences"
+                "$ref": "#/components/schemas/PreferencesInput"
               }
             }
           }
@@ -401,7 +406,7 @@
           }
         },
         "x-implementation-status": "implemented-local",
-        "description": "활성 항목 1~3개, 대소문자 무관 ID 중복 금지, 가중치 합 1±0.0001을 로컬 검증하고 사용자 JWT로 원자 교체 RPC를 호출한 뒤 같은 JWT/RLS로 재조회한다. hosted 검증은 미완료."
+        "description": "역할(main/sub)이 정본이다. main 정확히 1개·sub 0~2개, 대소문자 무관 ID 중복 금지, weight 전부/전무(생략 시 1/n, 주면 합 1±0.0001·main ≥ sub)를 로컬 검증하고 사용자 JWT로 원자 교체 RPC를 호출한 뒤 같은 JWT/RLS로 재조회한다(main 먼저). hosted 검증은 미완료."
       }
     },
     "/garment-batches": {
@@ -703,6 +708,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -722,7 +730,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "description": "analysis_jobs 자체가 내구성 있는 DB 큐다. uploaded 배치와 job 생성을 한 트랜잭션으로 처리. 기존 job은409; 실패 재시도는 retry 경로 이용.",
+        "description": "analysis_jobs 자체가 내구성 있는 DB 큐다. uploaded 배치와 job 생성을 한 트랜잭션으로 처리. 기존 job은409; 실패 재시도는 retry 경로 이용. 외부 AI 전송 고지에 동의하지 않은 사용자(profiles.ai_notice_accepted_at null)는 403 AI_NOTICE_REQUIRED(retryable=false). PATCH /me {ai_notice_accepted:true} 후 다시 요청한다.",
         "x-implementation-status": "implemented-local"
       }
     },
@@ -826,6 +834,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -845,7 +856,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "description": "failed이고 retryable, attempt<max_attempts일 때만 허용. 같은 job을 queued로 되돌리고 실제 claim 시 attempt 증가. partial_failed는 재시도 대상이 아니며 성공 draft를 검토/확정하거나 새 배치에서 재촬영한다. confirmed batch는409.",
+        "description": "failed이고 retryable, attempt<max_attempts일 때만 허용. 같은 job을 queued로 되돌리고 실제 claim 시 attempt 증가. partial_failed는 재시도 대상이 아니며 성공 draft를 검토/확정하거나 새 배치에서 재촬영한다. confirmed batch는409. 외부 AI 전송 고지에 동의하지 않은 사용자(profiles.ai_notice_accepted_at null)는 403 AI_NOTICE_REQUIRED(retryable=false). PATCH /me {ai_notice_accepted:true} 후 다시 요청한다.",
         "x-implementation-status": "implemented-local"
       }
     },
@@ -1047,7 +1058,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "description": "검토 가능 terminal job만 허용. 모든 소유권/버전 확인, garments 생성과 draft confirmed/batch confirmed를 한 트랜잭션 처리. 선택 안 된 draft는 rejected. 부분 실패 결과 확정하면 해당 batch 재분석 불가.",
+        "description": "검토 가능 terminal job만 허용. 모든 소유권/버전 확인, garments 생성과 draft confirmed/batch confirmed를 한 트랜잭션 처리. 선택 안 된 draft는 rejected. 부분 실패 결과 확정하면 해당 batch 재분석 불가. 선택한 draft의 현재 category가 6종이 아니면(null 포함) 422 VALIDATION_ERROR — 사용자가 PATCH로 6종 중 하나를 고른 뒤 확정한다.",
         "x-implementation-status": "implemented-local"
       }
     },
@@ -1321,7 +1332,7 @@
           {
             "name": "lat",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "number",
               "minimum": -90,
@@ -1331,12 +1342,21 @@
           {
             "name": "lon",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "number",
               "minimum": -180,
               "maximum": 180
             }
+          },
+          {
+            "name": "region_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RegionCode"
+            },
+            "description": "위치 권한 거절 시 직접 고른 시·도. lat/lon과 함께 보낼 수 없다."
           }
         ],
         "responses": {
@@ -1383,7 +1403,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "description": "issued_at=예보 발표 시각, valid_at=대상 시각. 관측값으로 표시하지 않는다. 지원 격자 외422. 위치는 격자로 축약 저장. 유효 캐시가 없고 API 장애면503.",
+        "description": "issued_at=예보 발표 시각, valid_at=대상 시각. 관측값으로 표시하지 않는다. 위치는 lat+lon(위치 권한 허용) 또는 region_code(거절 후 시·도 직접 선택) 중 정확히 하나; 둘 다 없거나 둘 다 있거나 모르는 코드면 422 VALIDATION_ERROR. 지원 격자 외 좌표는 422 UNSUPPORTED_LOCATION. 위치는 격자로 축약 저장. 유효 캐시가 없고 API 장애면 503.",
         "x-implementation-status": "implemented-local"
       }
     },
@@ -1585,7 +1605,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "description": "outfit_id가 이 세트 소속이고 worn_on=세트 target_date인지 확인. 만료/삭제 의류/타인 의류는409. 같은 날짜 동일 outfit은 기존 OOTD를 반환, 다른 outfit이면409. 기존 기록 덮어쓰기 금지.",
+        "description": "outfit_id가 이 세트 소속이고 worn_on=세트 target_date인지 확인. 만료/삭제 의류/타인 의류는409. 2026-10-10: 하루 OOTD 여러 건 — 같은 날 다른 outfit을 채택하면 착용(worn) 기록이 한 건 추가된다(날짜 충돌 없음). 같은 날 같은 outfit을 다시 채택하면(다른 키 포함) 기존 기록을 돌려준다.",
         "x-implementation-status": "implemented-local"
       }
     },
@@ -1666,7 +1686,7 @@
             "$ref": "#/components/responses/Unavailable"
           }
         },
-        "description": "from/to 포함, from<=to, 최대366일. worn_on DESC,id DESC.",
+        "description": "from/to 포함, from<=to, 최대366일. 하루 여러 건: worn_on DESC, created_at DESC, id DESC(같은 날은 최근 기록 먼저). cursor는 v2(created_at 포함)이며 이전 v1 cursor는 400.",
         "x-implementation-status": "implemented-local"
       },
       "post": {
@@ -1674,7 +1694,7 @@
         "tags": [
           "OOTD"
         ],
-        "summary": "수동·보관·추천 코디로 날짜 기록",
+        "summary": "착용 기록 추가(수동·보관 코디·추천 코디)",
         "x-implementation-status": "implemented-local",
         "responses": {
           "201": {
@@ -1735,7 +1755,76 @@
             "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
-        "description": "현재 DB 하루1개 임시 제약, 중복 날짜409. 계획과 착용 사실을 구분. 피드 게시와 별도 명령."
+        "description": "하루 여러 건 허용(2026-10-10): 같은 날짜에 기록이 있어도 한 건 추가한다(Idempotency-Key 재전송만 같은 기록 반환). 착용(worn)만 기록하며 미래 날짜는 422. 피드 게시와 별도 명령. photo_upload_id로 선택 사진 1장을 같은 트랜잭션에서 붙인다(멱등 재생은 처음 기록을 그대로 돌려줌)."
+      }
+    },
+    "/ootd/calendar": {
+      "get": {
+        "operationId": "getOotdCalendar",
+        "tags": [
+          "OOTD"
+        ],
+        "summary": "월별 OOTD 캘린더(날짜별 대표 사진 + 건수)",
+        "x-implementation-status": "implemented-local",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OotdCalendar"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "description": "from/to 포함, from<=to, 최대 62일(월 달력 6주 그리드 포함). 사용자 JWT로 get_my_ootd_calendar RPC를 호출한다. 날짜 하나를 누르면 GET /ootd?from=날짜&to=날짜로 그날 기록 목록을 받는다. 응답에는 Storage 키를 넣지 않고 대표 기록 사진의 5분 서명 URL만 준다(RPC는 has_photo만 반환, 키는 서버가 사용자 RLS로 읽어 서명). GET /ootd·/ootd/{id}도 같은 원칙(photo는 서명 URL)."
       }
     },
     "/ootd/{ootdId}": {
@@ -1805,7 +1894,7 @@
           }
         },
         "x-implementation-status": "implemented-local",
-        "description": "날짜·구성·메모·평가·계획상태 수정. 버전 확인. 원본 보관 코디나 이미 공유한 post에 자동 반영하지 않음."
+        "description": "날짜·구성·메모·평가 수정. 버전 확인. 이미 기록이 있는 날짜로 옮겨도 된다. wear_status는 worn만 보낼 수 있다(이전 planned 기록을 worn으로 바꾸는 용도). 원본 보관 코디나 이미 공유한 post에 자동 반영하지 않음. photo_upload_id만 바꿔도 버전 확인 후 version+1. 추천 수락으로 만든 기록은 기존 규칙대로 수정 불가."
       },
       "delete": {
         "operationId": "deleteOotdEntry",
@@ -2462,6 +2551,7 @@
                 "cloudy",
                 "rain",
                 "snow",
+                "wind",
                 "unknown"
               ]
             }
@@ -3134,7 +3224,7 @@
             "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
-        "description": "가시 post 확인, 별도 worker 구현 필요. 이미지 분석/임베딩 모델 계약 미확정."
+        "description": "공개 포스트의 연결 아이템을 내 옷장과 동기 매칭한다(대표 이미지 재분석 없음). 연결 아이템이 없는 2026-10-10 이전 포스트는 409 MIMIC_CONFLICT. 응답 status는 보통 succeeded 또는 no_match."
       }
     },
     "/mimic-jobs/{jobId}": {
@@ -3193,6 +3283,126 @@
           }
         ],
         "description": "요청자 소유 검사와 원본 게시물 현재 가시성 재확인. 비공개·삭제 원본은404."
+      }
+    },
+    "/media-uploads": {
+      "post": {
+        "operationId": "createMediaUpload",
+        "tags": [
+          "Media"
+        ],
+        "summary": "프로필 이미지·OOTD 사진 업로드 URL",
+        "x-implementation-status": "implemented-local",
+        "description": "본인 전용 업로드 행을 만들고 서버가 정한 경로(`{user}/{purpose}/{id}.{ext}`)로 서명 PUT URL을 준다. Storage RLS는 이 대기 행과 MIME·크기가 맞을 때만 쓰기를 허용한다. 24시간 내 미완료 업로드는 10개까지(409 TOO_MANY_OPEN_UPLOADS). 경로는 응답하지 않는다.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MediaUploadCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "업로드 URL 발급",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaUploadCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/media-uploads/{uploadId}/complete-upload": {
+      "post": {
+        "operationId": "completeMediaUpload",
+        "tags": [
+          "Media"
+        ],
+        "summary": "업로드 검증",
+        "x-implementation-status": "implemented-local",
+        "description": "본문 없음. 실제 bytes(MIME·매직 바이트)와 Storage 메타데이터(소유자·MIME·크기)를 확인해 verified로 바꾼다. 실패하면 업로드를 폐기하고 422. 검증 뒤 PATCH /me(avatar_upload_id) 또는 POST·PATCH /ootd(photo_upload_id)로 붙인다. 재호출은 같은 결과.",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "검증 완료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaUploadVerified"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
       }
     }
   },
@@ -3422,15 +3632,14 @@
       },
       "GarmentCategory": {
         "type": "string",
+        "description": "유저플로우 6종(2026-10-09 사용자 결정): outerwear 아우터, top 상의, bottom 하의, shoes 신발, bag 가방, accessory 액세서리. dress·other는 제거됨.",
         "enum": [
+          "outerwear",
           "top",
           "bottom",
-          "outerwear",
-          "dress",
           "shoes",
           "bag",
-          "accessory",
-          "other"
+          "accessory"
         ]
       },
       "JobStatus": {
@@ -3485,6 +3694,7 @@
         "additionalProperties": false,
         "required": [
           "aesthetic_id",
+          "role",
           "weight"
         ],
         "properties": {
@@ -3492,10 +3702,19 @@
             "type": "string",
             "format": "uuid"
           },
+          "role": {
+            "type": "string",
+            "enum": [
+              "main",
+              "sub"
+            ],
+            "description": "정본 역할. 사용자당 main 정확히 1개, sub 0~2개(DB 부분 unique index + 지연 제약 트리거)."
+          },
           "weight": {
             "type": "number",
             "exclusiveMinimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "description": "기존 의미 유지(합 1). main 가중치는 모든 sub 이상."
           }
         }
       },
@@ -3513,7 +3732,7 @@
             },
             "minItems": 1,
             "maxItems": 3,
-            "description": "aesthetic_id 중복 금지. 가중치 합은 1±0.0001. 활성 카탈로그만 허용."
+            "description": "메인 1개가 먼저, 보조는 aesthetic_id 순."
           }
         },
         "examples": [
@@ -3521,10 +3740,12 @@
             "preferences": [
               {
                 "aesthetic_id": "11111111-1111-4111-8111-111111111111",
+                "role": "main",
                 "weight": 0.7
               },
               {
                 "aesthetic_id": "22222222-2222-4222-8222-222222222222",
+                "role": "sub",
                 "weight": 0.3
               }
             ]
@@ -3561,7 +3782,10 @@
           "timezone",
           "default_tpo",
           "onboarding_completed",
-          "preferences"
+          "preferences",
+          "avatar",
+          "ai_notice_accepted_at",
+          "training_consent"
         ],
         "properties": {
           "id": {
@@ -3604,7 +3828,35 @@
             "items": {
               "$ref": "#/components/schemas/AestheticPreference"
             },
-            "maxItems": 3
+            "maxItems": 3,
+            "description": "메인 1개가 먼저, 보조는 aesthetic_id 순."
+          },
+          "ai_notice_accepted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "외부 AI 전송 고지(필수)에 처음 동의한 시각. null이면 의류 분석 작업 생성·재시도가 403 AI_NOTICE_REQUIRED로 거절된다."
+          },
+          "training_consent": {
+            "type": "boolean",
+            "description": "사진 학습 사용 동의(선택). 기본 false. 저장·조회만 하며 이 값을 읽는 학습 파이프라인은 아직 없다."
+          },
+          "avatar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssetRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "profile-media 비공개 버킷의 5분 서명 읽기 URL. 없으면 null. Storage 경로는 응답하지 않는다."
           }
         }
       },
@@ -3643,11 +3895,32 @@
               }
             ],
             "deprecated": true,
-            "description": "업로드·소유권·삭제 수명주기 계약 전까지 미지원이며, 값이 전달되면 422 UNSUPPORTED_FIELD로 거절한다."
+            "description": "구 필드. 값이 전달되면 422 UNSUPPORTED_FIELD로 거절한다. avatar_upload_id를 쓴다."
+          },
+          "avatar_upload_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "purpose=avatar로 만들고 complete-upload로 검증된 내 업로드 ID. null이면 프로필 이미지 제거. 다른 사람·미검증·다른 용도·이미 다른 곳에 붙은 업로드는 409/404."
+          },
+          "ai_notice_accepted": {
+            "const": true,
+            "type": "boolean",
+            "description": "가입 시 외부 AI 전송 고지 동의. true만 허용(철회 불가, false는 422). 이미 동의했으면 처음 시각을 유지한다."
+          },
+          "training_consent": {
+            "type": "boolean",
+            "description": "사진 학습 사용 동의(선택). 마이페이지에서 켜고 끈다."
           }
         },
         "minProperties": 1,
-        "description": "avatar_asset_id 업로드/검증 계약은 별도 확정 필요. 임의 외부 URL이나 Storage key 입력 금지."
+        "description": "프로필 이미지는 POST /media-uploads(purpose=avatar) → 서명 PUT → complete-upload → avatar_upload_id 순서. 임의 외부 URL이나 Storage key 입력 금지. 고지·학습 동의는 같은 PATCH에서 한 트랜잭션(update_my_profile_settings)으로 저장된다."
       },
       "BatchCreate": {
         "type": "object",
@@ -3912,7 +4185,10 @@
         ],
         "properties": {
           "category": {
-            "$ref": "#/components/schemas/GarmentCategory"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "AI 예측 라벨. GarmentCategory 6종이면 그대로 draft category가 된다. 6종 밖 값(예: dress, other)은 저장 카테고리로 쓰지 않고 draft category=null로 두어 사용자가 6종 중 하나를 고르기 전까지 확정할 수 없다. 원래 라벨은 내부 raw_prediction.ai_category로만 보관한다."
           },
           "color_hex": {
             "anyOf": [
@@ -4133,7 +4409,15 @@
             ],
             "properties": {
               "category": {
-                "$ref": "#/components/schemas/GarmentCategory"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/GarmentCategory"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "null이면 AI 라벨이 6종 밖이라 사용자 카테고리 선택이 필요하다. 이 상태로 confirm하면 422 VALIDATION_ERROR."
               },
               "subcategory": {
                 "anyOf": [
@@ -4158,7 +4442,15 @@
             ],
             "properties": {
               "category": {
-                "$ref": "#/components/schemas/GarmentCategory"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/GarmentCategory"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "null이면 AI 라벨이 6종 밖이라 사용자 카테고리 선택이 필요하다. 이 상태로 confirm하면 422 VALIDATION_ERROR."
               },
               "subcategory": {
                 "anyOf": [
@@ -4506,24 +4798,41 @@
         }
       },
       "Location": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "lat",
-          "lon"
-        ],
-        "properties": {
-          "lat": {
-            "type": "number",
-            "minimum": -90,
-            "maximum": 90
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "lat",
+              "lon"
+            ],
+            "properties": {
+              "lat": {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              },
+              "lon": {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              }
+            }
           },
-          "lon": {
-            "type": "number",
-            "minimum": -180,
-            "maximum": 180
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "region_code"
+            ],
+            "properties": {
+              "region_code": {
+                "$ref": "#/components/schemas/RegionCode"
+              }
+            }
           }
-        }
+        ],
+        "description": "위치 권한 허용 시 좌표, 거절 시 시·도 코드."
       },
       "WeatherSnapshot": {
         "type": "object",
@@ -4643,13 +4952,26 @@
           },
           "tpo": {
             "type": "null",
-            "description": "TPO 로직 유지 여부 미결. v0.3 제안은 생략/null만 허용하고 프로필 기본값을 자동 적용하지 않음."
+            "description": "TPO 제외(2026-10-10 결정, PM 협의). deprecated: 생략/null만 허용한다.",
+            "deprecated": true
           },
           "requested_count": {
             "type": "integer",
             "minimum": 1,
             "maximum": 3,
             "default": 3
+          },
+          "aesthetic_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "홈에서 고른 추구미 Chip. 생략·null이면 메인. 사용자의 메인·보조 중 하나가 아니면 422. 추천 엔진은 이 추구미를 가장 크게(0.6), 나머지는 role 순(메인 0.25, 보조 0.15)으로 반영한다."
           }
         },
         "examples": [
@@ -4659,9 +4981,16 @@
               "lon": 127.12
             },
             "requested_count": 3
+          },
+          {
+            "location": {
+              "region_code": "seoul"
+            },
+            "requested_count": 3,
+            "aesthetic_id": "00000000-0000-4000-8000-000000000000"
           }
         ],
-        "description": "현재는 온디맨드 계약. 05:00/07:00 자동 생성은 미확정. 위치 직접 선택도 Location으로 전달."
+        "description": "현재는 온디맨드 계약. 05:00/07:00 자동 생성은 미확정. 위치 권한 거절 시 location.region_code로 시·도를 직접 선택한다."
       },
       "RecommendationScores": {
         "type": "object",
@@ -4772,7 +5101,9 @@
           "shortfall_reasons",
           "created_at",
           "expires_at",
-          "target_date"
+          "target_date",
+          "selected_aesthetic_id",
+          "missing_categories"
         ],
         "properties": {
           "id": {
@@ -4821,7 +5152,8 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "사유 코드: insufficient_wardrobe(옷 2벌 미만, 추천 0개), missing_category:<카테고리>(부족 부위), requested_count_not_reached(요청 수보다 적게 생성). missing_complete_base_outfit은 2026-10-10 이전 저장 행에만 있을 수 있다."
           },
           "created_at": {
             "type": "string",
@@ -4835,9 +5167,28 @@
             "type": "string",
             "format": "date",
             "description": "생성 시 사용자 timezone의 오늘 날짜"
+          },
+          "selected_aesthetic_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "이 추천에 반영한 추구미(Chip). 선호가 없는 사용자이거나 2026-10-10 이전 저장 행이면 null."
+          },
+          "missing_categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GarmentCategory"
+            },
+            "description": "부족 부위 안내. 상의·하의·신발 중 없는 것, 추운 날(10도 미만)에는 아우터 포함. shortfall_reasons의 missing_category:<카테고리>에서 파생."
           }
         },
-        "description": "status=ready이면 outfits 1~3, insufficient_wardrobe이면 빈 배열. requested_count 미만이면 shortfall_reasons로 설명한다.",
+        "description": "옷장 충분 = 카테고리 무관 2벌 이상(2026-10-10 결정, PM 협의). 2벌 미만이면 status=insufficient_wardrobe, outfits 빈 배열. 2벌 이상이면 status=ready로 있는 옷만으로 1~3개를 만들고(하의가 없어도 조합), 요청 수 미만이면 shortfall_reasons로 설명한다.",
         "allOf": [
           {
             "if": {
@@ -4923,7 +5274,8 @@
           "version",
           "created_at",
           "visibility",
-          "item_snapshot"
+          "item_snapshot",
+          "photo"
         ],
         "properties": {
           "worn_on": {
@@ -4968,7 +5320,8 @@
               "unconfirmed",
               "planned",
               "worn"
-            ]
+            ],
+            "description": "worn만 새로 생긴다. unconfirmed·planned는 2026-10-10 이전 기록 호환값이며 통계의 착용 횟수에 들어가지 않는다."
           },
           "note": {
             "anyOf": [
@@ -5043,6 +5396,17 @@
                 }
               }
             }
+          },
+          "photo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssetRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "선택 사진 1장의 ootd-private 5분 서명 읽기 URL. 없으면 null."
           }
         }
       },
@@ -5092,9 +5456,9 @@
           "wear_status": {
             "type": "string",
             "enum": [
-              "planned",
               "worn"
-            ]
+            ],
+            "description": "2026-10-10: 착용(worn)만 기록한다. 생략 시 worn. planned·unconfirmed는 기존 행 호환용으로 조회에만 남고 쓰기는 422."
           },
           "note": {
             "anyOf": [
@@ -5133,6 +5497,18 @@
           "expected_version": {
             "type": "integer",
             "minimum": 1
+          },
+          "photo_upload_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "purpose=ootd_photo로 검증된 내 업로드 ID. 기록당 1장, 업로드 1개는 한 번만 붙는다. PATCH에서 null이면 사진 제거."
           }
         },
         "minProperties": 2
@@ -5588,8 +5964,7 @@
         "additionalProperties": false,
         "required": [
           "worn_on",
-          "garment_ids",
-          "wear_status"
+          "garment_ids"
         ],
         "properties": {
           "worn_on": {
@@ -5631,9 +6006,9 @@
           "wear_status": {
             "type": "string",
             "enum": [
-              "planned",
               "worn"
-            ]
+            ],
+            "description": "2026-10-10: 착용(worn)만 기록한다. 생략 시 worn. planned·unconfirmed는 기존 행 호환용으로 조회에만 남고 쓰기는 422."
           },
           "note": {
             "anyOf": [
@@ -5668,9 +6043,21 @@
                 "type": "null"
               }
             ]
+          },
+          "photo_upload_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "purpose=ootd_photo로 검증된 내 업로드 ID. 기록당 1장, 업로드 1개는 한 번만 붙는다. PATCH에서 null이면 사진 제거."
           }
         },
-        "description": "owned garment IDs 기반 서버 스냅샷 저장. saved_outfit_id/outfit_id 동시 non-null 금지. source ID는 출처일 뿐 날짜 없는 보관함을 변경하지 않음. 미래 worn 금지. planned rating은 null. 날씨의 날짜·지역을 서버 검증하고 불명확하면 null."
+        "description": "owned garment IDs 기반 서버 스냅샷 저장. saved_outfit_id/outfit_id 동시 non-null 금지. source ID는 출처일 뿐 날짜 없는 보관함을 변경하지 않음. 미래 worn 금지. 날씨의 날짜·지역을 서버 검증하고 불명확하면 null."
       },
       "FeedPostCreate": {
         "type": "object",
@@ -5707,6 +6094,7 @@
               "cloudy",
               "rain",
               "snow",
+              "wind",
               "unknown"
             ]
           },
@@ -5720,6 +6108,17 @@
               }
             ]
           },
+          "garment_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "작성자 본인 옷장 아이템 1~10개(순서 = 표시 순서). source_ootd_id가 있으면 생략 가능하며 그 OOTD의 아직 사용 가능한 아이템을 자동 연결한다. 남의 옷은 404 GARMENT_NOT_FOUND, 삭제된 옷은 409."
+          },
           "visibility": {
             "type": "string",
             "enum": [
@@ -5727,7 +6126,25 @@
             ]
           }
         },
-        "description": "공유용 private draft만 생성. 검증된 feed media 확보 후 PATCH로 public 전환. source_ootd_id는 본인 것만 허용하고 DTO로 노출 금지. 갤러리 게시도 가능. 날씨는 사용자 입력 태그이며 실제 날씨 사실로 간주하지 않음."
+        "anyOf": [
+          {
+            "required": [
+              "garment_ids"
+            ]
+          },
+          {
+            "required": [
+              "source_ootd_id"
+            ],
+            "properties": {
+              "source_ootd_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        ],
+        "description": "포스트에는 작성자 본인 옷장 아이템을 최소 1개 연결해야 한다. OOTD 출처(source_ootd_id UUID)가 없으면 garment_ids(1~10개)가 필수이고, 있으면 생략 시 그 OOTD의 아이템을 자동 연결한다(DB에서도 보장). 공유용 private draft만 생성. 검증된 feed media 확보 후 PATCH로 public 전환. source_ootd_id는 본인 것만 허용하고 DTO로 노출 금지. 갤러리 게시도 가능. 날씨는 사용자 입력 태그이며 실제 날씨 사실로 간주하지 않음."
       },
       "FeedPost": {
         "type": "object",
@@ -5741,6 +6158,7 @@
           "temperature_c",
           "visibility",
           "media",
+          "linked_items",
           "liked_by_me",
           "like_count",
           "created_at"
@@ -5788,6 +6206,7 @@
               "cloudy",
               "rain",
               "snow",
+              "wind",
               "unknown"
             ]
           },
@@ -5813,6 +6232,14 @@
             "items": {
               "$ref": "#/components/schemas/AssetRead"
             }
+          },
+          "linked_items": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/FeedLinkedItem"
+            },
+            "description": "연결 아이템의 공개 표현. 작성자의 garment_id와 옷장 이미지(garment_assets)는 공개하지 않는다. 2026-10-10 이전 게시물은 빈 배열일 수 있다."
           },
           "liked_by_me": {
             "type": "boolean"
@@ -5846,9 +6273,54 @@
               "private",
               "public"
             ]
+          },
+          "garment_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "주면 연결 아이템 전체를 교체한다. 빈 배열·null은 422(1개 미만 불가)."
           }
         },
-        "minProperties": 1
+        "minProperties": 1,
+        "description": "public 전환에는 검증된 media와 연결 아이템 1개 이상이 필요하다(없으면 409 FEED_CONFLICT)."
+      },
+      "FeedLinkedItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "position",
+          "category"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "연결 행 ID(feed_post_items.id). 옷장 garment_id가 아니다. 따라입기 결과의 post_item_id와 같다."
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "outerwear",
+              "top",
+              "bottom",
+              "shoes",
+              "bag",
+              "accessory"
+            ]
+          }
+        },
+        "description": "연결 시점 스냅샷. 작성자가 원본 옷을 나중에 삭제해도 유지된다. 아이템 이미지는 공개하지 않는다(공개용 복사 업로드는 미구현·PM 협의)."
       },
       "FeedMediaCreate": {
         "type": "object",
@@ -5908,8 +6380,10 @@
         "additionalProperties": false,
         "required": [
           "source_item_key",
+          "post_item_id",
+          "category",
           "garment_id",
-          "similarity",
+          "grade",
           "reason"
         ],
         "properties": {
@@ -5917,6 +6391,36 @@
             "type": "string",
             "pattern": "^source-[1-9][0-9]*$",
             "maxLength": 20
+          },
+          "post_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "원본 포스트의 연결 아이템(FeedLinkedItem.id). 2026-10-10 이전 이미지 기반 결과는 null."
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "outerwear",
+                  "top",
+                  "bottom",
+                  "shoes",
+                  "bag",
+                  "accessory"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "garment_id": {
             "anyOf": [
@@ -5929,17 +6433,21 @@
               }
             ]
           },
-          "similarity": {
+          "grade": {
             "anyOf": [
               {
-                "type": "number",
-                "minimum": -1,
-                "maximum": 1
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "아이템 등급. 내부 점수 >= 0.75 high, >= 0.5 medium, 그 미만 low(SQL g10_mimic_grade). 매칭 없음은 null. 숫자 점수는 남의 옷 속성 추정을 막기 위해 응답하지 않는다."
           },
           "reason": {
             "type": "string",
@@ -5957,6 +6465,7 @@
           "matches",
           "model_version",
           "coverage",
+          "grade",
           "error"
         ],
         "properties": {
@@ -6009,6 +6518,22 @@
               }
             ]
           },
+          "grade": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "전체 등급. 연결 아이템 전체의 내부 점수 평균(매칭 없음 = 0)에 아이템과 같은 임계값을 적용한다. succeeded에서만 값이 있고 그 외 null."
+          },
           "error": {
             "anyOf": [
               {
@@ -6020,7 +6545,7 @@
             ]
           }
         },
-        "description": "similarity는 모델별 원시 유사도이지 일치 확률이 아님. source_item_key와 reason은 BFF가 비식별·서버 문구로 재투영한다. succeeded도 일부 unmatched 가능. no_match는 등록 CTA. 저장은 사용자가 매칭을 확인 후 owned garment IDs로 saved-outfits POST."
+        "description": "2026-10-10부터 포스트 연결 아이템 ↔ 내 옷장 아이템을 규칙 기반(rule-v1: 같은 카테고리 필수, 색 0.4·패턴 0.3·추구미 0.3, 0.2 미만 미매칭, 옷장 아이템 1개는 한 번만 배정)으로 동기 매칭하므로 생성 응답이 곧 succeeded/no_match다. 대표 이미지는 재분석하지 않는다. 같은 모델의 garment_embeddings가 있으면 rule-v1-vector로 혼합한다. 점수는 내부에만 보관하고 응답은 등급(high/medium/low)과 coverage만 준다. source_item_key와 reason은 BFF가 비식별·서버 문구로 재투영한다. succeeded도 일부 unmatched 가능. no_match는 등록 CTA. 저장은 사용자가 매칭을 확인 후 owned garment IDs로 saved-outfits POST."
       },
       "ClosetStats": {
         "type": "object",
@@ -6028,7 +6553,9 @@
         "required": [
           "as_of",
           "wear_counts",
-          "unworn_30_days"
+          "unworn_30_days",
+          "top_aesthetic",
+          "aesthetic_totals"
         ],
         "properties": {
           "as_of": {
@@ -6062,6 +6589,24 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "top_aesthetic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AestheticTotal"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "최다 추구미(2026-10-10 결정, PM 협의) = 착용(worn) OOTD 기록마다 포함된 옷의 추구미 점수(garment_aesthetic_scores)를 더한 합이 가장 큰 추구미. 같은 날 여러 건이면 건마다 더한다. 동점은 code 순. 점수가 하나도 없으면 null."
+          },
+          "aesthetic_totals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AestheticTotal"
+            },
+            "description": "추구미별 점수 합, 내림차순. 첫 항목이 top_aesthetic."
           }
         }
       },
@@ -6144,8 +6689,275 @@
             ]
           }
         }
+      },
+      "AestheticPreferenceInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "aesthetic_id",
+          "role"
+        ],
+        "properties": {
+          "aesthetic_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "main",
+              "sub"
+            ]
+          },
+          "weight": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "description": "선택. 모든 항목에 주거나 모두 생략한다. 생략하면 서버가 1/n으로 저장한다(추천 가중 정책은 미결)."
+          }
+        }
+      },
+      "PreferencesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "preferences"
+        ],
+        "properties": {
+          "preferences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AestheticPreferenceInput"
+            },
+            "minItems": 1,
+            "maxItems": 3,
+            "description": "main 정확히 1개 + sub 0~2개. aesthetic_id 중복 금지(대소문자 무관). weight는 전부 또는 전무; 주면 합 1±0.0001이고 main ≥ 각 sub. 활성 카탈로그만 허용."
+          }
+        },
+        "examples": [
+          {
+            "preferences": [
+              {
+                "aesthetic_id": "11111111-1111-4111-8111-111111111111",
+                "role": "main"
+              },
+              {
+                "aesthetic_id": "22222222-2222-4222-8222-222222222222",
+                "role": "sub"
+              }
+            ]
+          }
+        ]
+      },
+      "MediaUploadCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "purpose",
+          "content_type",
+          "file_size"
+        ],
+        "properties": {
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "avatar",
+              "ootd_photo"
+            ],
+            "description": "avatar→profile-media, ootd_photo→ootd-private 비공개 버킷."
+          },
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp"
+            ]
+          },
+          "file_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20971520
+          }
+        }
+      },
+      "MediaUploadCreated": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "purpose",
+          "upload"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "avatar",
+              "ootd_photo"
+            ]
+          },
+          "upload": {
+            "$ref": "#/components/schemas/SignedUpload"
+          }
+        }
+      },
+      "MediaUploadVerified": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "purpose",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "avatar",
+              "ootd_photo"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "const": "verified"
+          }
+        }
+      },
+      "RegionCode": {
+        "type": "string",
+        "enum": [
+          "seoul",
+          "busan",
+          "daegu",
+          "incheon",
+          "gwangju",
+          "daejeon",
+          "ulsan",
+          "sejong",
+          "gyeonggi",
+          "gangwon",
+          "chungbuk",
+          "chungnam",
+          "jeonbuk",
+          "jeonnam",
+          "gyeongbuk",
+          "gyeongnam",
+          "jeju"
+        ],
+        "description": "시·도 17개 코드. 위치 권한을 거절한 사용자가 직접 고른다(2026-10-10 결정, PM 협의). 서버가 시청·도청 소재지 부근의 근사 대표 좌표로 바꿔 같은 격자 날씨를 조회하므로 같은 시·도 안에서도 실제 위치 날씨와 다를 수 있다."
+      },
+      "AestheticTotal": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "aesthetic_id",
+          "code",
+          "label",
+          "score_total"
+        ],
+        "properties": {
+          "aesthetic_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "score_total": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        }
+      },
+      "OotdCalendarDay": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "date",
+          "count",
+          "representative_ootd_id",
+          "photo",
+          "weather_snapshot_id"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "그 날짜의 착용 기록 수"
+          },
+          "representative_ootd_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "대표 기록: 사진이 있는 기록 중 가장 최근(created_at DESC, id DESC), 사진이 없으면 가장 최근 기록"
+          },
+          "photo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssetRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "대표 기록 사진의 5분 서명 읽기 URL. 없으면 null."
+          },
+          "weather_snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "대표 기록의 저장 당시 날씨"
+          }
+        }
+      },
+      "OotdCalendar": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "to",
+          "days"
+        ],
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date"
+          },
+          "to": {
+            "type": "string",
+            "format": "date"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OotdCalendarDay"
+            },
+            "description": "기록이 있는 날짜만, 날짜 DESC"
+          }
+        }
       }
     }
   },
-        "x-implementation-status": "implemented-local"
+  "x-implementation-status": "implemented-local"
 }

@@ -5,7 +5,8 @@ import { projectUrl } from './supabase-user.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIMESTAMP = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})$/;
-const CATEGORIES = new Set(['top', 'bottom', 'outerwear', 'dress', 'shoes', 'bag', 'accessory', 'other']);
+// 2026-10-09 user decision: the user flow's six categories (아우터·상의·하의·신발·가방·액세서리).
+const CATEGORIES = new Set(['outerwear', 'top', 'bottom', 'shoes', 'bag', 'accessory']);
 const QUERY_KEYS = new Set(['cursor', 'limit', 'category']);
 const PATCH_KEYS = new Set(['expected_version', 'attributes']);
 const ATTRIBUTE_KEYS = new Set(['category', 'subcategory', 'note']);

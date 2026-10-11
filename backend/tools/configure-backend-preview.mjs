@@ -2,7 +2,10 @@
 import fs from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-const config=await fs.readFile(new URL('../supabase/general setting.txt',import.meta.url),'utf8');
+import {pathToFileURL} from 'node:url';
+// Key memos live outside the repo (default: <_P-project>/_key/). Override with MAFICO_KEY_DIR.
+const keyDir=process.env.MAFICO_KEY_DIR?pathToFileURL(process.env.MAFICO_KEY_DIR.replace(/[\\/]?$/,'/')):new URL('../../../_key/',import.meta.url);
+const config=await fs.readFile(new URL('supabase_project_settings.txt',keyDir),'utf8');
 const ref=config.match(/project id\s*[:=]\s*([a-z0-9]{20})/i)?.[1];
 const key=config.match(/sb_publishable_[A-Za-z0-9_-]+/)?.[0];
 if(!ref||!key) throw Error('Required project fields missing');

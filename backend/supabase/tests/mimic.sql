@@ -1,75 +1,115 @@
 -- Run only against a disposable migrated database. Every fixture rolls back.
--- Coverage evidence: mimic_candidate_items and idempotency_keys are exercised through the narrow service RPCs below.
+-- 2026-10-10: Styling Mimic matches a post's linked items (feed_post_items) against the viewer's
+-- closet. Coverage evidence: mimic_requests, mimic_source_items, mimic_candidate_items,
+-- feed_posts, feed_post_items, garments, garment_assets, garment_embeddings, idempotency_keys.
 begin;
 
 insert into auth.users(id) values
  ('78000000-0000-4000-8000-000000000001'),
  ('78000000-0000-4000-8000-000000000002'),
  ('78000000-0000-4000-8000-000000000003');
-insert into public.garment_batches(id,user_id,status) values
- ('78010000-0000-4000-8000-000000000001','78000000-0000-4000-8000-000000000001','confirmed'),
- ('78010000-0000-4000-8000-000000000003','78000000-0000-4000-8000-000000000003','confirmed');
-insert into public.garment_assets(id,user_id,batch_id,kind,object_key,content_type,byte_size,verified_at) values
- ('78020000-0000-4000-8000-000000000001','78000000-0000-4000-8000-000000000001','78010000-0000-4000-8000-000000000001','cutout','78000000-0000-4000-8000-000000000001/mimic/top.png','image/png',12,now()),
- ('78020000-0000-4000-8000-000000000003','78000000-0000-4000-8000-000000000003','78010000-0000-4000-8000-000000000003','cutout','78000000-0000-4000-8000-000000000003/mimic/other.png','image/png',12,now());
-insert into public.analysis_jobs(id,user_id,batch_id,status,completed_at) values
- ('78030000-0000-4000-8000-000000000001','78000000-0000-4000-8000-000000000001','78010000-0000-4000-8000-000000000001','succeeded',now()),
- ('78030000-0000-4000-8000-000000000003','78000000-0000-4000-8000-000000000003','78010000-0000-4000-8000-000000000003','succeeded',now());
-insert into public.garment_drafts(id,user_id,batch_id,job_id,item_index,asset_id,status,raw_prediction,model_version) values
- ('78040000-0000-4000-8000-000000000001','78000000-0000-4000-8000-000000000001','78010000-0000-4000-8000-000000000001','78030000-0000-4000-8000-000000000001',0,'78020000-0000-4000-8000-000000000001','confirmed','{"category":"top"}','v1'),
- ('78040000-0000-4000-8000-000000000003','78000000-0000-4000-8000-000000000003','78010000-0000-4000-8000-000000000003','78030000-0000-4000-8000-000000000003',0,'78020000-0000-4000-8000-000000000003','confirmed','{"category":"top"}','v1');
-insert into public.garments(id,user_id,source_draft_id,asset_id,category,attributes) values
- ('78050000-0000-4000-8000-000000000001','78000000-0000-4000-8000-000000000001','78040000-0000-4000-8000-000000000001','78020000-0000-4000-8000-000000000001','top','{"category":"top"}'),
- ('78050000-0000-4000-8000-000000000003','78000000-0000-4000-8000-000000000003','78040000-0000-4000-8000-000000000003','78020000-0000-4000-8000-000000000003','top','{"category":"top"}');
-insert into storage.objects(id,bucket_id,name,owner_id,metadata,updated_at) values
- ('78060000-0000-4000-8000-000000000001','closet-private','78000000-0000-4000-8000-000000000001/mimic/top.png','78000000-0000-4000-8000-000000000001','{"mimetype":"image/png","size":12}',now()),
- ('78060000-0000-4000-8000-000000000003','closet-private','78000000-0000-4000-8000-000000000003/mimic/other.png','78000000-0000-4000-8000-000000000003','{"mimetype":"image/png","size":12}',now());
+select set_config('test.aes1',(select id::text from public.aesthetics where active order by id limit 1),true);
+select set_config('test.aes2',(select id::text from public.aesthetics where active order by id offset 1 limit 1),true);
+select set_config('test.aes3',(select id::text from public.aesthetics where active order by id offset 2 limit 1),true);
 
+create function pg_temp.mk_garment(p_user uuid,p_id uuid,p_category text,p_color text,p_pattern text)
+returns void language plpgsql as $$
+declare b uuid:=gen_random_uuid(); a uuid:=gen_random_uuid(); j uuid:=gen_random_uuid(); d uuid:=gen_random_uuid();
+ k text:=p_user::text||'/mimic/'||p_id::text||'.png';
+begin
+ insert into public.garment_batches(id,user_id,status) values(b,p_user,'confirmed');
+ insert into public.garment_assets(id,user_id,batch_id,kind,object_key,content_type,byte_size,verified_at)
+  values(a,p_user,b,'cutout',k,'image/png',12,now());
+ insert into storage.objects(bucket_id,name,owner_id,metadata) values('closet-private',k,p_user,'{"mimetype":"image/png","size":12}');
+ insert into public.analysis_jobs(id,user_id,batch_id,status,completed_at) values(j,p_user,b,'succeeded',now());
+ insert into public.garment_drafts(id,user_id,batch_id,job_id,item_index,asset_id,status,raw_prediction,model_version)
+  values(d,p_user,b,j,0,a,'confirmed',jsonb_build_object('category',p_category),'v1');
+ insert into public.garments(id,user_id,source_draft_id,asset_id,category,color_hex,pattern,attributes)
+  values(p_id,p_user,d,a,p_category,p_color,p_pattern,jsonb_build_object('category',p_category));
+end $$;
+-- Author (…02) source garment; viewer (…01) closet; another member (…03).
+select pg_temp.mk_garment('78000000-0000-4000-8000-000000000002','78050000-0000-4000-8000-000000000020','top','#112233','stripe');
+select pg_temp.mk_garment('78000000-0000-4000-8000-000000000001','78050000-0000-4000-8000-000000000001','top','#112234','Stripe');
+select pg_temp.mk_garment('78000000-0000-4000-8000-000000000001','78050000-0000-4000-8000-000000000002','top','#ffffff','dot');
+select pg_temp.mk_garment('78000000-0000-4000-8000-000000000001','78050000-0000-4000-8000-000000000003','shoes',null,null);
+select pg_temp.mk_garment('78000000-0000-4000-8000-000000000003','78050000-0000-4000-8000-000000000009','top','#112233','stripe');
+insert into public.garment_aesthetic_scores(user_id,garment_id,aesthetic_id,score,model_version) values
+ ('78000000-0000-4000-8000-000000000001','78050000-0000-4000-8000-000000000001',current_setting('test.aes1')::uuid,0.8,'v1'),
+ ('78000000-0000-4000-8000-000000000001','78050000-0000-4000-8000-000000000001',current_setting('test.aes2')::uuid,0.2,'v1'),
+ ('78000000-0000-4000-8000-000000000001','78050000-0000-4000-8000-000000000002',current_setting('test.aes3')::uuid,1,'v1');
+
+-- Posts are inserted directly (transaction rolls back before the deferred link check).
 insert into public.feed_posts(id,user_id,caption,visibility) values
- ('78100000-0000-4000-8000-000000000001','78000000-0000-4000-8000-000000000002','one','public'),
- ('78100000-0000-4000-8000-000000000002','78000000-0000-4000-8000-000000000002','two','public'),
- ('78100000-0000-4000-8000-000000000003','78000000-0000-4000-8000-000000000002','three','public'),
- ('78100000-0000-4000-8000-000000000004','78000000-0000-4000-8000-000000000002','four','public'),
- ('78100000-0000-4000-8000-000000000005','78000000-0000-4000-8000-000000000002','five','public'),
- ('78100000-0000-4000-8000-000000000006','78000000-0000-4000-8000-000000000002','private','private');
-insert into public.feed_media(id,user_id,post_id,object_key,position,verified_at,content_type,byte_size) values
- ('78200000-0000-4000-8000-000000000001','78000000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000001','78000000-0000-4000-8000-000000000002/78100000-0000-4000-8000-000000000001/1.jpg',0,now(),'image/jpeg',10),
- ('78200000-0000-4000-8000-000000000002','78000000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000002','78000000-0000-4000-8000-000000000002/78100000-0000-4000-8000-000000000002/2.jpg',0,now(),'image/jpeg',10),
- ('78200000-0000-4000-8000-000000000003','78000000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000003','78000000-0000-4000-8000-000000000002/78100000-0000-4000-8000-000000000003/3.jpg',0,now(),'image/jpeg',10),
- ('78200000-0000-4000-8000-000000000004','78000000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000004','78000000-0000-4000-8000-000000000002/78100000-0000-4000-8000-000000000004/4.jpg',0,now(),'image/jpeg',10),
- ('78200000-0000-4000-8000-000000000005','78000000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000005','78000000-0000-4000-8000-000000000002/78100000-0000-4000-8000-000000000005/5.jpg',0,now(),'image/jpeg',10),
- ('78200000-0000-4000-8000-000000000006','78000000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000006','78000000-0000-4000-8000-000000000002/78100000-0000-4000-8000-000000000006/6.jpg',0,now(),'image/jpeg',10);
-insert into storage.objects(id,bucket_id,name,owner_id,metadata,updated_at) values
- ('78300000-0000-4000-8000-000000000001','feed-private','78000000-0000-4000-8000-000000000002/78100000-0000-4000-8000-000000000001/1.jpg','78000000-0000-4000-8000-000000000002','{"mimetype":"image/jpeg","size":10}',now()),
- ('78300000-0000-4000-8000-000000000002','feed-private','78000000-0000-4000-8000-000000000002/78100000-0000-4000-8000-000000000002/2.jpg','78000000-0000-4000-8000-000000000002','{"mimetype":"image/jpeg","size":10}',now()),
- ('78300000-0000-4000-8000-000000000003','feed-private','78000000-0000-4000-8000-000000000002/78100000-0000-4000-8000-000000000003/3.jpg','78000000-0000-4000-8000-000000000002','{"mimetype":"image/jpeg","size":10}',now()),
- ('78300000-0000-4000-8000-000000000004','feed-private','78000000-0000-4000-8000-000000000002/78100000-0000-4000-8000-000000000004/4.jpg','78000000-0000-4000-8000-000000000002','{"mimetype":"image/jpeg","size":10}',now()),
- ('78300000-0000-4000-8000-000000000005','feed-private','78000000-0000-4000-8000-000000000002/78100000-0000-4000-8000-000000000005/5.jpg','78000000-0000-4000-8000-000000000002','{"mimetype":"image/jpeg","size":10}',now()),
- ('78300000-0000-4000-8000-000000000006','feed-private','78000000-0000-4000-8000-000000000002/78100000-0000-4000-8000-000000000006/6.jpg','78000000-0000-4000-8000-000000000002','{"mimetype":"image/jpeg","size":10}',now());
+ ('78100000-0000-4000-8000-000000000001','78000000-0000-4000-8000-000000000002','top+bottom','public'),
+ ('78100000-0000-4000-8000-000000000002','78000000-0000-4000-8000-000000000002','bag only','public'),
+ ('78100000-0000-4000-8000-000000000003','78000000-0000-4000-8000-000000000002','two tops','public'),
+ ('78100000-0000-4000-8000-000000000004','78000000-0000-4000-8000-000000000002','legacy','public'),
+ ('78100000-0000-4000-8000-000000000005','78000000-0000-4000-8000-000000000002','private','private');
+insert into public.feed_post_items(id,user_id,post_id,garment_id,position,category,color_hex,pattern,aesthetic_scores) values
+ ('78200000-0000-4000-8000-000000000001','78000000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000001',
+  '78050000-0000-4000-8000-000000000020',0,'top','#112233','stripe',
+  jsonb_build_object(current_setting('test.aes1'),0.8,current_setting('test.aes2'),0.2)),
+ ('78200000-0000-4000-8000-000000000002','78000000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000001',null,1,'bottom',null,null,'{}'),
+ ('78200000-0000-4000-8000-000000000003','78000000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000002',null,0,'bag',null,null,'{}'),
+ ('78200000-0000-4000-8000-000000000004','78000000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000003',null,0,'top','#112233','stripe','{}'),
+ ('78200000-0000-4000-8000-000000000005','78000000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000003',null,1,'top','#112233','stripe','{}'),
+ ('78200000-0000-4000-8000-000000000006','78000000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000005',null,0,'top',null,null,'{}');
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','78000000-0000-4000-8000-000000000001',true);
-do $$ declare created jsonb; replay jsonb; begin
+do $$ declare created jsonb; replay jsonb; m0 jsonb; m1 jsonb; begin
  begin perform id from public.mimic_requests; raise exception 'FAIL raw mimic table exposed';
   exception when insufficient_privilege then null; end;
  begin perform job_id from public.mimic_source_items; raise exception 'FAIL source snapshot exposed';
   exception when insufficient_privilege then null; end;
  begin perform public.claim_mimic_job(120); raise exception 'FAIL claim exposed';
   exception when insufficient_privilege then null; end;
- begin perform public.inspect_mimic_callback(gen_random_uuid(),gen_random_uuid(),1,repeat('a',64));
-  raise exception 'FAIL callback inspect exposed'; exception when insufficient_privilege then null; end;
- begin perform public.create_my_mimic_job('78100000-0000-4000-8000-000000000006','mimic-private-one');
+ begin perform public.g10_mimic_rule_score('#000000',null,'{}','#000000',null,'{}'); raise exception 'FAIL scorer exposed';
+  exception when insufficient_privilege then null; end;
+ begin perform public.create_my_mimic_job('78100000-0000-4000-8000-000000000005','mimic-private-one');
   raise exception 'FAIL private source accepted'; exception when no_data_found then null; end;
+ -- Legacy link-less post: the representative-image path is retired.
+ begin perform public.create_my_mimic_job('78100000-0000-4000-8000-000000000004','mimic-legacy-one');
+  raise exception 'FAIL legacy post mimicked'; exception when raise_exception then if sqlerrm<>'feed_media_unavailable' then raise; end if; end;
+
  created:=public.create_my_mimic_job('78100000-0000-4000-8000-000000000001','mimic-create-one');
- replay:=public.create_my_mimic_job('78100000-0000-4000-8000-000000000001','mimic-create-two');
- if created->>'status'<>'queued' or jsonb_array_length(created->'matches')<>0
- or created->>'id'<>replay->>'id' or created->'coverage'<>'null'::jsonb
- then raise exception 'FAIL queued projection/open job reuse'; end if;
+ replay:=public.create_my_mimic_job('78100000-0000-4000-8000-000000000001','mimic-create-one');
+ m0:=created->'matches'->0; m1:=created->'matches'->1;
+ if created->>'status'<>'succeeded' or created->>'model_version'<>'rule-v1' or (created->>'coverage')::numeric<>0.5
+ or jsonb_array_length(created->'matches')<>2 or created->>'id'<>replay->>'id'
+ or m0->>'garment_id'<>'78050000-0000-4000-8000-000000000001' or m0->>'grade'<>'high' or m0?'similarity'
+ or m0->>'post_item_id'<>'78200000-0000-4000-8000-000000000001' or m0->>'category'<>'top'
+ or m0->>'source_item_key'<>'item:78200000-0000-4000-8000-000000000001'
+ or m1->'garment_id'<>'null'::jsonb or m1->'grade'<>'null'::jsonb or created->>'grade'<>'low' or created::text like '%similarity%' or m1->>'category'<>'bottom'
+ then raise exception 'FAIL synchronous linked-item match %',created; end if;
+ -- Neither the author's closet id nor any object key leaks.
+ if created::text like '%78050000-0000-4000-8000-000000000020%' or created::text like '%object_key%' or created::text like '%/mimic/%'
+ then raise exception 'FAIL private identifiers in result'; end if;
  begin perform public.create_my_mimic_job('78100000-0000-4000-8000-000000000002','mimic-create-one');
   raise exception 'FAIL create key conflict'; exception when raise_exception then if sqlerrm<>'idempotency_conflict' then raise; end if; end;
- perform set_config('test.mimic_job_one',created->>'id',true);
+
+ -- No same-category garment => no_match with one null entry per linked item.
+ created:=public.create_my_mimic_job('78100000-0000-4000-8000-000000000002','mimic-nomatch-one');
+ if created->>'status'<>'no_match' or (created->>'coverage')::numeric<>0 or created->'matches'->0->'garment_id'<>'null'::jsonb
+ then raise exception 'FAIL no-match result'; end if;
+
+ -- One closet garment is assigned at most once; the far top scores below the 0.2 floor.
+ created:=public.create_my_mimic_job('78100000-0000-4000-8000-000000000003','mimic-distinct-one');
+ if created->>'status'<>'succeeded' or (created->>'coverage')::numeric<>0.5
+ or (select count(distinct x->>'garment_id') from jsonb_array_elements(created->'matches') x where x->>'garment_id' is not null)<>1
+ then raise exception 'FAIL distinct garment assignment'; end if;
+ perform set_config('test.mimic_job_one',replay->>'id',true);
 end $$;
 reset role;
+
+-- Rule scorer bounds: unknown attributes are weak evidence (0.3), identical attributes score 1.
+do $$ begin
+ if public.g10_mimic_rule_score(null,null,'{}',null,null,'{}')<>0.3
+ or public.g10_mimic_rule_score('#000000','plain','{"a":1}','#000000','PLAIN','{"a":1}')<>1
+ or public.g10_mimic_rule_score('#000000','plain','{"a":1}','#ffffff','dot','{"b":1}')<>0
+ or public.g10_vector_similarity('{1,0}','{0,1}')<>0 or public.g10_vector_similarity('{1,0}','{1}') is not null
+ then raise exception 'FAIL rule/vector scorer bounds'; end if;
+end $$;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','78000000-0000-4000-8000-000000000003',true);
@@ -79,57 +119,36 @@ do $$ begin
 end $$;
 reset role;
 
+-- The image worker path is retired: nothing is ever claimable.
 set local role service_role;
-do $$ declare claimed jsonb; inspected jsonb; matches jsonb; applied jsonb; begin
- claimed:=public.claim_mimic_job(120);
- if claimed->>'id'<>current_setting('test.mimic_job_one')
- or claimed->'source_items'->0->>'source_item_key'<>'media:78200000-0000-4000-8000-000000000001'
- or jsonb_array_length(claimed->'source_items')<>1 or jsonb_array_length(claimed->'candidates')<>1
- or claimed->'candidates'->0->>'garment_id'<>'78050000-0000-4000-8000-000000000001'
- then raise exception 'FAIL immutable source/candidate claim snapshot'; end if;
- perform set_config('test.mimic_attempt',claimed->>'attempt',true);
- perform set_config('test.mimic_lease',claimed->>'lease_token',true);
- inspected:=public.inspect_mimic_callback('78500000-0000-4000-8000-000000000001',
-  current_setting('test.mimic_job_one')::uuid,(claimed->>'attempt')::integer,repeat('a',64));
- if inspected->>'replayed'<>'false' or inspected#>>'{job,status}'<>'running' then raise exception 'FAIL callback inspect'; end if;
- matches:=jsonb_build_array(jsonb_build_object('source_item_key','media:78200000-0000-4000-8000-000000000001',
-  'garment_id','78050000-0000-4000-8000-000000000003','similarity',0.7,'reason','cross'));
- begin perform public.apply_mimic_result('78500000-0000-4000-8000-000000000002',current_setting('test.mimic_job_one')::uuid,
-  current_setting('test.mimic_attempt')::integer,current_setting('test.mimic_lease')::uuid,repeat('b',64),
-  'succeeded','mimic-v1',matches,1,null);
-  raise exception 'FAIL cross owner candidate accepted'; exception when invalid_parameter_value then if sqlerrm<>'invalid_candidate_snapshot' then raise; end if; end;
- update public.garments set version=version+1 where id='78050000-0000-4000-8000-000000000001';
- matches:=jsonb_build_array(jsonb_build_object('source_item_key','media:78200000-0000-4000-8000-000000000001',
-  'garment_id','78050000-0000-4000-8000-000000000001','similarity',0.8,'reason','비슷한 상의'));
- begin perform public.apply_mimic_result('78500000-0000-4000-8000-000000000003',current_setting('test.mimic_job_one')::uuid,
-  current_setting('test.mimic_attempt')::integer,current_setting('test.mimic_lease')::uuid,repeat('c',64),
-  'succeeded','mimic-v1',matches,1,null);
-  raise exception 'FAIL changed candidate fence accepted'; exception when raise_exception then if sqlerrm<>'candidate_fence_changed' then raise; end if; end;
- update public.garments set version=version-1 where id='78050000-0000-4000-8000-000000000001';
- applied:=public.apply_mimic_result('78500000-0000-4000-8000-000000000004',current_setting('test.mimic_job_one')::uuid,
-  current_setting('test.mimic_attempt')::integer,current_setting('test.mimic_lease')::uuid,repeat('d',64),
-  'succeeded','mimic-v1',matches,1,null);
- if applied->>'applied'<>'true' then raise exception 'FAIL valid callback'; end if;
- if public.apply_mimic_result('78500000-0000-4000-8000-000000000004',current_setting('test.mimic_job_one')::uuid,
-  current_setting('test.mimic_attempt')::integer,current_setting('test.mimic_lease')::uuid,repeat('d',64),
-  'succeeded','mimic-v1',matches,1,null)->>'applied'<>'false' then raise exception 'FAIL callback replay'; end if;
- begin perform public.apply_mimic_result('78500000-0000-4000-8000-000000000004',current_setting('test.mimic_job_one')::uuid,
-  current_setting('test.mimic_attempt')::integer,current_setting('test.mimic_lease')::uuid,repeat('e',64),
-  'succeeded','mimic-v1',matches,1,null);
-  raise exception 'FAIL callback payload conflict'; exception when raise_exception then if sqlerrm<>'callback_conflict' then raise; end if; end;
+do $$ begin
+ if public.claim_mimic_job(120) is not null then raise exception 'FAIL retired claim path'; end if;
 end $$;
 reset role;
 
+-- AI hook: embeddings with a shared model_version blend into the score and mark the model.
+insert into public.garment_embeddings(user_id,garment_id,model_version,embedding) values
+ ('78000000-0000-4000-8000-000000000002','78050000-0000-4000-8000-000000000020','emb-v1','{1,0}'),
+ ('78000000-0000-4000-8000-000000000001','78050000-0000-4000-8000-000000000001','emb-v1','{0,1}');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','78000000-0000-4000-8000-000000000001',true);
-do $$ declare projected jsonb; begin
- projected:=public.get_my_mimic_job(current_setting('test.mimic_job_one')::uuid);
- if projected->>'status'<>'succeeded' or projected->>'model_version'<>'mimic-v1'
- or projected#>>'{matches,0,garment_id}'<>'78050000-0000-4000-8000-000000000001'
- or (projected->>'coverage')::numeric<>1 or projected::text like '%object_key%'
- then raise exception 'FAIL succeeded safe projection'; end if;
+do $$ declare created jsonb; begin
+ created:=public.create_my_mimic_job('78100000-0000-4000-8000-000000000001','mimic-vector-one');
+ if created->>'model_version'<>'rule-v1-vector' or created#>>'{matches,0,grade}'<>'low'
+ then raise exception 'FAIL vector blend %',created; end if;
+ perform set_config('test.mimic_vector_job',created->>'id',true);
 end $$;
 reset role;
+do $$ begin
+ -- Raw scores stay internal.
+ if (select (result#>>'{matches,0,similarity}')::numeric from public.mimic_requests where id=current_setting('test.mimic_vector_job')::uuid)
+  not between 0.45 and 0.55
+ or public.g10_mimic_grade(0.75)<>'high' or public.g10_mimic_grade(0.7499)<>'medium' or public.g10_mimic_grade(0.5)<>'medium'
+ or public.g10_mimic_grade(0.4999)<>'low' or public.g10_mimic_grade(-1)<>'low' or public.g10_mimic_grade(null) is not null
+ then raise exception 'FAIL internal score/grade thresholds'; end if;
+end $$;
+
+-- Viewer deletes the matched garment: the stored result withholds it.
 update public.garments set deleted_at=now() where id='78050000-0000-4000-8000-000000000001';
 set local role authenticated;
 select set_config('request.jwt.claim.sub','78000000-0000-4000-8000-000000000001',true);
@@ -148,107 +167,17 @@ do $$ begin
   raise exception 'FAIL private source result exposed'; exception when no_data_found then null; end;
 end $$;
 reset role;
-update public.feed_posts set visibility='public' where id='78100000-0000-4000-8000-000000000001';
 
--- A complete no-match result retains one source entry with a null candidate.
-set local role authenticated;
-select set_config('request.jwt.claim.sub','78000000-0000-4000-8000-000000000001',true);
-select set_config('test.mimic_job_two',(public.create_my_mimic_job('78100000-0000-4000-8000-000000000002','mimic-create-three')->>'id'),true);
-reset role;
-set local role service_role;
-do $$ declare claimed jsonb; matches jsonb; begin
- claimed:=public.claim_mimic_job(120);
- matches:=jsonb_build_array(jsonb_build_object('source_item_key','media:78200000-0000-4000-8000-000000000002',
-  'garment_id',null,'similarity',null,'reason','맞는 후보 없음'));
- perform public.apply_mimic_result('78500000-0000-4000-8000-000000000005',(claimed->>'id')::uuid,
-  (claimed->>'attempt')::integer,(claimed->>'lease_token')::uuid,repeat('f',64),'no_match','mimic-v1',matches,0,null);
-end $$;
-reset role;
-set local role authenticated;
-select set_config('request.jwt.claim.sub','78000000-0000-4000-8000-000000000001',true);
-do $$ declare projected jsonb:=public.get_my_mimic_job(current_setting('test.mimic_job_two')::uuid); begin
- if projected->>'status'<>'no_match' or (projected->>'coverage')::numeric<>0
- or projected->'matches'->0->'garment_id'<>'null'::jsonb then raise exception 'FAIL no-match projection'; end if;
-end $$;
-reset role;
-
--- GET and claim both sweep the independent two-hour execution deadline; retention is seven days after terminal.
-set local role authenticated;
-select set_config('request.jwt.claim.sub','78000000-0000-4000-8000-000000000001',true);
-select set_config('test.mimic_job_three',(public.create_my_mimic_job('78100000-0000-4000-8000-000000000003','mimic-deadline-get')->>'id'),true);
-reset role;
-update public.mimic_requests set absolute_deadline=now()-interval '1 second' where id=current_setting('test.mimic_job_three')::uuid;
-set local role authenticated;
-select set_config('request.jwt.claim.sub','78000000-0000-4000-8000-000000000001',true);
-do $$ declare projected jsonb:=public.get_my_mimic_job(current_setting('test.mimic_job_three')::uuid); begin
- if projected->>'status'<>'failed' or projected#>>'{error,code}'<>'DEADLINE_EXCEEDED' then raise exception 'FAIL get deadline sweep'; end if;
-end $$;
-reset role;
 do $$ begin
- if not exists(select 1 from public.mimic_requests where id=current_setting('test.mimic_job_three')::uuid
+ if not exists(select 1 from public.mimic_requests where id=current_setting('test.mimic_job_one')::uuid
   and retention_expires_at between now()+interval '6 days 23 hours' and now()+interval '7 days 1 hour')
  then raise exception 'FAIL terminal seven-day retention'; end if;
-end $$;
-update public.mimic_requests set retention_expires_at=now()-interval '1 second' where id=current_setting('test.mimic_job_three')::uuid;
-set local role authenticated;
-select set_config('request.jwt.claim.sub','78000000-0000-4000-8000-000000000001',true);
-do $$ begin
- begin perform public.get_my_mimic_job(current_setting('test.mimic_job_three')::uuid);
-  raise exception 'FAIL expired terminal result visible'; exception when no_data_found then null; end;
-end $$;
-reset role;
-
-set local role authenticated;
-select set_config('request.jwt.claim.sub','78000000-0000-4000-8000-000000000001',true);
-select set_config('test.mimic_claim_deadline',(public.create_my_mimic_job('78100000-0000-4000-8000-000000000005','mimic-deadline-claim')->>'id'),true);
-reset role;
-update public.mimic_requests set absolute_deadline=now()-interval '1 second'
- where id=current_setting('test.mimic_claim_deadline')::uuid;
-set local role service_role;
-select public.claim_mimic_job(120);
-reset role;
-do $$ begin
- if not exists(select 1 from public.mimic_requests where id=current_setting('test.mimic_claim_deadline')::uuid
-  and status='failed' and error_code='DEADLINE_EXCEEDED' and retention_expires_at is not null)
- then raise exception 'FAIL claim deadline sweep'; end if;
-end $$;
-
-set local role authenticated;
-select set_config('request.jwt.claim.sub','78000000-0000-4000-8000-000000000001',true);
-select set_config('test.mimic_job_four',(public.create_my_mimic_job('78100000-0000-4000-8000-000000000004','mimic-source-change')->>'id'),true);
-reset role;
-update public.feed_media set deleted_at=now() where id='78200000-0000-4000-8000-000000000004';
-set local role service_role;
-select public.claim_mimic_job(120);
-reset role;
-do $$ begin
- if not exists(select 1 from public.mimic_requests where id=current_setting('test.mimic_job_four')::uuid
-  and status='failed' and error_code='SOURCE_UNAVAILABLE') then raise exception 'FAIL claim source fence'; end if;
-end $$;
-update public.feed_media set deleted_at=null where id='78200000-0000-4000-8000-000000000004';
-
--- User advisory serialization plus partial unique index make the per-user cap deterministic.
-set local role authenticated;
-select set_config('request.jwt.claim.sub','78000000-0000-4000-8000-000000000001',true);
-do $$ declare a jsonb; b jsonb; c jsonb; begin
- a:=public.create_my_mimic_job('78100000-0000-4000-8000-000000000003','mimic-cap-one');
- b:=public.create_my_mimic_job('78100000-0000-4000-8000-000000000004','mimic-cap-two');
- c:=public.create_my_mimic_job('78100000-0000-4000-8000-000000000005','mimic-cap-three');
- if a->>'id'=b->>'id' or b->>'id'=c->>'id' then raise exception 'FAIL cap setup'; end if;
- begin perform public.create_my_mimic_job('78100000-0000-4000-8000-000000000001','mimic-cap-four');
-  raise exception 'FAIL open cap bypassed'; exception when raise_exception then if sqlerrm<>'mimic_open_limit' then raise; end if; end;
-end $$;
-reset role;
-
-do $$ declare before_count integer; begin
- select count(*) into before_count from public.mimic_requests where post_id in(
-  select id from public.feed_posts where user_id='78000000-0000-4000-8000-000000000002');
- if before_count=0 then raise exception 'FAIL cascade fixture'; end if;
- delete from auth.users where id='78000000-0000-4000-8000-000000000002';
+ if exists(select 1 from public.mimic_candidate_items where garment_id='78050000-0000-4000-8000-000000000009')
+ then raise exception 'FAIL foreign closet in candidates'; end if;
+ delete from public.feed_posts where user_id='78000000-0000-4000-8000-000000000002';
  if exists(select 1 from public.mimic_requests where post_id in(
-  '78100000-0000-4000-8000-000000000001','78100000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000003',
-  '78100000-0000-4000-8000-000000000004','78100000-0000-4000-8000-000000000005','78100000-0000-4000-8000-000000000006'))
- then raise exception 'FAIL author/post mimic cascade'; end if;
+  '78100000-0000-4000-8000-000000000001','78100000-0000-4000-8000-000000000002','78100000-0000-4000-8000-000000000003'))
+ then raise exception 'FAIL post mimic cascade'; end if;
 end $$;
 
 rollback;

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { bearerToken } from './auth.js';
 import { baseHeaders, failure } from './errors.js';
 import { createUserClient } from './supabase-user.js';
+import { signMediaReads } from './media.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TPO_CODES = new Set([
@@ -18,6 +19,11 @@ export function validProfile(row) {
   if (typeof row.timezone !== 'string' || row.timezone.trim() === '') return null;
   if (row.default_tpo !== null && !TPO_CODES.has(row.default_tpo)) return null;
   if (typeof row.onboarding_completed !== 'boolean' || !Array.isArray(row.preferences) || row.preferences.length > 3) return null;
+  if (row.ai_notice_accepted_at !== null && (typeof row.ai_notice_accepted_at !== 'string' ||
+      !Number.isFinite(Date.parse(row.ai_notice_accepted_at)))) return null;
+  if (typeof row.training_consent !== 'boolean') return null;
+  if (row.avatar_object_key !== null && (typeof row.avatar_object_key !== 'string' ||
+      !row.avatar_object_key.startsWith(`${row.id.toLowerCase()}/avatar/`))) return null;
   const preferences = [];
   for (const preference of row.preferences) {
     if (
@@ -27,17 +33,24 @@ export function validProfile(row) {
       typeof preference.weight !== 'number' ||
       !Number.isFinite(preference.weight) ||
       preference.weight <= 0 ||
-      preference.weight > 1
+      preference.weight > 1 ||
+      !['main', 'sub'].includes(preference.role)
     ) return null;
-    preferences.push({ aesthetic_id: preference.aesthetic_id, weight: preference.weight });
+    preferences.push({ aesthetic_id: preference.aesthetic_id, role: preference.role, weight: preference.weight });
   }
+  // Role is canonical: a non-empty set has exactly one main (listed first) and at most two subs.
+  if (preferences.length && preferences.filter(item => item.role === 'main').length !== 1) return null;
+  preferences.sort((a, b) => (a.role === b.role ? 0 : a.role === 'main' ? -1 : 1));
   return {
     id: row.id,
     display_name: row.display_name,
     timezone: row.timezone,
     default_tpo: row.default_tpo,
     onboarding_completed: row.onboarding_completed,
-    preferences
+    preferences,
+    ai_notice_accepted_at: row.ai_notice_accepted_at,
+    training_consent: row.training_consent,
+    avatar_object_key: row.avatar_object_key
   };
 }
 
@@ -57,11 +70,12 @@ export async function authenticatedUser(req, { env, request, requestId }) {
   return { client, user };
 }
 
-export async function readProfile(client, userId, requestId, missingStatus = 404) {
+export async function readProfile(client, userId, dependencies, missingStatus = 404) {
+  const { requestId } = dependencies;
   const profileResult = await client.select('profiles', [
-    ['select', 'id,display_name,timezone,default_tpo,onboarding_completed,preferences:user_aesthetic_preferences(aesthetic_id,weight)'],
+    ['select', 'id,display_name,timezone,default_tpo,onboarding_completed,ai_notice_accepted_at,training_consent,avatar_object_key,preferences:user_aesthetic_preferences(aesthetic_id,role,weight)'],
     ['id', `eq.${userId}`],
-    ['preferences.order', 'aesthetic_id.asc']
+    ['preferences.order', 'role.asc,aesthetic_id.asc']
   ]);
   if (profileResult.error) return profileResult;
   const rows = profileResult.data;
@@ -71,14 +85,19 @@ export async function readProfile(client, userId, requestId, missingStatus = 404
       : failure(500, 'INTERNAL_ERROR', requestId) };
   }
   const profile = validProfile(rows[0]);
-  return profile ? { data: profile } : { error: failure(500, 'INTERNAL_ERROR', requestId) };
+  if (!profile) return { error: failure(500, 'INTERNAL_ERROR', requestId) };
+  const { avatar_object_key: avatarKey, ...body } = profile;
+  const signed = await signMediaReads(client, 'profile-media', [avatarKey], dependencies);
+  if (signed.error) return signed;
+  return { data: { ...body, avatar: avatarKey ? signed.data.get(avatarKey) ?? null : null } };
 }
 
 export async function getProfileResponse(req, {
   env = process.env,
   request = fetch,
   createRequestId = randomUUID,
-  requestId = createRequestId()
+  requestId = createRequestId(),
+  now
 } = {}) {
   if (!['GET', 'HEAD'].includes(req.method)) {
     return failure(405, 'METHOD_NOT_ALLOWED', requestId, false, { Allow: 'GET, HEAD' });
@@ -86,7 +105,7 @@ export async function getProfileResponse(req, {
 
   const auth = await authenticatedUser(req, { env, request, requestId });
   if (auth.error) return auth.error;
-  const result = await readProfile(auth.client, auth.user.id, requestId);
+  const result = await readProfile(auth.client, auth.user.id, { env, requestId, now });
   if (result.error) return result.error;
   return { status: 200, headers: baseHeaders(requestId), body: result.data };
 }

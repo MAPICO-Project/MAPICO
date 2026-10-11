@@ -79,11 +79,15 @@ do $$ declare created jsonb; replay jsonb; saved uuid; ootd uuid; planned uuid; 
  if replay->>'replayed'<>'true' or jsonb_array_length(snap)<>2
  or (select array_agg(key order by key) from jsonb_object_keys(snap->0) key)<>array['category','garment_id','unavailable']
  or snap->0->>'garment_id'<>'76500000-0000-4000-8000-000000000002' then raise exception 'FAIL ootd replay/exact ordered snapshot'; end if;
- begin perform public.create_my_ootd(current_date-2,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'planned',null,null,null,'ootd-date-other');
-  raise exception 'FAIL date conflict'; exception when raise_exception then if sqlerrm<>'ootd_date_conflict' then raise; end if; end;
+ -- 2026-10-10: a second record on the same day is added, not rejected.
+ perform public.create_my_ootd(current_date-2,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'worn',null,null,null,'ootd-date-other');
+ if (select count(*) from public.ootd_entries where user_id=auth.uid() and worn_on=current_date-2)<>2
+ then raise exception 'FAIL same-day second record'; end if;
+ begin perform public.create_my_ootd(current_date-2,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'planned',null,null,null,'ootd-planned-new');
+  raise exception 'FAIL planned creatable'; exception when invalid_parameter_value then null; end;
  begin perform public.create_my_ootd(current_date+1,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'worn',null,null,null,'ootd-future');
   raise exception 'FAIL future worn'; exception when invalid_parameter_value then null; end;
- created:=public.create_my_ootd(current_date-1,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'planned',null,null,null,'ootd-planned');
+ created:=public.create_my_ootd(current_date-1,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'worn',null,null,null,'ootd-planned');
  planned:=(created->>'ootd_id')::uuid;
  patched:=public.update_my_ootd(planned,1,false,null,false,null,false,null,false,null,false,null,true,'plan note',false,null,false,null);
  if patched->>'version'<>'2' then raise exception 'FAIL ootd update version'; end if;
@@ -101,27 +105,28 @@ do $$ declare created jsonb; replay jsonb; saved uuid; ootd uuid; planned uuid; 
  if replay->>'replayed'<>'false' or replay->>'saved_outfit_id'=saved::text
  then raise exception 'FAIL saved create replay tombstone cleanup'; end if;
 
- created:=public.create_my_ootd(current_date-3,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'planned',null,null,null,'ootd-disposable');
+ created:=public.create_my_ootd(current_date-3,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'worn',null,null,null,'ootd-disposable');
  disposable:=(created->>'ootd_id')::uuid;
  created:=public.delete_my_ootd(disposable,'ootd-delete-one');
  replay:=public.delete_my_ootd(disposable,'ootd-delete-one');
  if created->>'replayed'<>'false' or replay->>'replayed'<>'true' then raise exception 'FAIL delete replay'; end if;
- replay:=public.create_my_ootd(current_date-3,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'planned',null,null,null,'ootd-disposable');
+ replay:=public.create_my_ootd(current_date-3,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'worn',null,null,null,'ootd-disposable');
  if replay->>'replayed'<>'false' or replay->>'ootd_id'=disposable::text
  then raise exception 'FAIL OOTD create replay tombstone cleanup'; end if;
 
- created:=public.create_my_ootd(current_date-4,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'planned',null,null,null,'ootd-blocked');
+ created:=public.create_my_ootd(current_date-4,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'worn',null,null,null,'ootd-blocked');
  blocked:=(created->>'ootd_id')::uuid;
  perform set_config('test.g6_blocked_ootd',blocked::text,true);
- created:=public.create_my_ootd(current_date-5,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'planned',null,null,null,'ootd-accepted');
+ created:=public.create_my_ootd(current_date-5,array['76500000-0000-4000-8000-000000000003'::uuid],null,null,'worn',null,null,null,'ootd-accepted');
  accepted:=(created->>'ootd_id')::uuid;
  perform set_config('test.g6_accepted_ootd',accepted::text,true);
 
  stats:=public.get_my_closet_statistics();
  if stats->>'as_of' is null
  or (select (x->>'count')::integer from jsonb_array_elements(stats->'wear_counts') x where x->>'garment_id'='76500000-0000-4000-8000-000000000001')<>1
- or (select (x->>'count')::integer from jsonb_array_elements(stats->'wear_counts') x where x->>'garment_id'='76500000-0000-4000-8000-000000000003')<>0
- or not(stats->'unworn_30_days' ? '76500000-0000-4000-8000-000000000003')
+ -- Per-record counting: g3 is in five worn records (-2 second record, -6 moved, -3 recreated, -4, -5).
+ or (select (x->>'count')::integer from jsonb_array_elements(stats->'wear_counts') x where x->>'garment_id'='76500000-0000-4000-8000-000000000003')<>5
+ or (stats->'unworn_30_days' ? '76500000-0000-4000-8000-000000000003')
  then raise exception 'FAIL worn-only statistics'; end if;
 end $$;
 reset role;

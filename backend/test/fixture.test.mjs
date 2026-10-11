@@ -12,7 +12,8 @@ test('getMe success fixture is visibly synthetic and matches the response allowl
   assert.equal(value.operation_id, 'getMe');
   assert.equal(value.status, 200);
   assert.deepEqual(Object.keys(value.body).sort(), [
-    'default_tpo', 'display_name', 'id', 'onboarding_completed', 'preferences', 'timezone'
+    'ai_notice_accepted_at', 'avatar', 'default_tpo', 'display_name', 'id', 'onboarding_completed', 'preferences', 'timezone',
+    'training_consent'
   ]);
   assert.match(value.body.id, /^[0-9a-f-]{36}$/);
   assert.ok(value.body.preferences.length <= 3);
@@ -31,7 +32,8 @@ test('G1 fixtures remain synthetic and match the account response allowlists', a
   const failure = JSON.parse(await readFile(new URL('./fixtures/g1-account.validation-error.json', import.meta.url), 'utf8'));
   assert.match(success.fixture_id, /^fixture-/);
   assert.deepEqual(Object.keys(success.profile).sort(), [
-    'default_tpo', 'display_name', 'id', 'onboarding_completed', 'preferences', 'timezone'
+    'ai_notice_accepted_at', 'avatar', 'default_tpo', 'display_name', 'id', 'onboarding_completed', 'preferences', 'timezone',
+    'training_consent'
   ]);
   assert.deepEqual(Object.keys(success.onboarding).sort(), ['completed', 'knows_aesthetic', 'tutorial_seen']);
   assert.match(failure.fixture_id, /^fixture-/);

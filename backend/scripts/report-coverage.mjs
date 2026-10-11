@@ -65,7 +65,8 @@ const report = {
     contract_tested_operations: implemented.filter(([, entry]) => entry.contract_test).length,
     rls_evidence_operations: implemented.filter(([, entry]) => entry.rls_test).length
   },
-  valid: errors.length === 0 && operations.size === 50 && tables.size === 24,
+  // Counts change as the contract grows; require every operation to be registered instead of fixed totals.
+  valid: errors.length === 0 && [...operations.keys()].every(id => implementedIds.has(id)),
   errors
 };
 console.log(JSON.stringify(report, null, 2));

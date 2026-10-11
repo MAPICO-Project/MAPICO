@@ -69,7 +69,7 @@ test('allowed preflight is unauthenticated, bodyless and never reaches upstream'
   assert.equal(result.body, undefined);
   assert.equal(result.headers['X-Request-Id'], requestId);
   assert.equal(result.headers['Access-Control-Allow-Origin'], allowed);
-  assert.equal(result.headers['Access-Control-Allow-Methods'], 'GET, HEAD, PATCH');
+  assert.equal(result.headers['Access-Control-Allow-Methods'], 'GET, HEAD, PATCH, DELETE');
   assert.equal(result.headers['Access-Control-Allow-Headers'], 'Authorization, Content-Type');
   assert.match(result.headers.Vary, /Access-Control-Request-Headers/);
 });
@@ -94,7 +94,7 @@ test('method errors still expose safe CORS and request metadata', async () => {
   });
   const result = await invoke(handler, { method: 'POST', origin: allowed });
   assert.equal(result.statusCode, 405);
-  assert.equal(result.headers.Allow, 'GET, HEAD, PATCH');
+  assert.equal(result.headers.Allow, 'GET, HEAD, PATCH, DELETE');
   assert.equal(result.headers['Access-Control-Allow-Origin'], allowed);
   assert.equal(result.headers.Vary, 'Origin');
 });

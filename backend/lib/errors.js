@@ -39,6 +39,11 @@ export const MESSAGES = Object.freeze({
   FEED_CONFLICT: '현재 피드 상태와 요청이 충돌합니다.',
   MIMIC_JOB_NOT_FOUND: '따라입기 작업을 찾을 수 없습니다.',
   MIMIC_CONFLICT: '현재 따라입기 작업 상태와 요청이 충돌합니다.',
+  MEDIA_UPLOAD_NOT_FOUND: '업로드를 찾을 수 없습니다.',
+  MEDIA_UPLOAD_CONFLICT: '현재 업로드 상태에서는 요청을 처리할 수 없습니다.',
+  TOO_MANY_OPEN_UPLOADS: '완료되지 않은 업로드가 너무 많습니다.',
+  AI_NOTICE_REQUIRED: '외부 AI 분석 전송 고지에 동의해야 사진을 분석할 수 있습니다.',
+  ACCOUNT_DELETION_INCOMPLETE: '계정 삭제를 끝내지 못했습니다. 잠시 후 다시 시도해 주세요.',
   INTERNAL_ERROR: '서버 내부 오류가 발생했습니다.'
 });
 
