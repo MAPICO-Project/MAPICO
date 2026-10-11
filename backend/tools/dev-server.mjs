@@ -14,6 +14,7 @@ const origins = (args.origin ?? 'http://localhost:5173').split(',');
 let weatherMode = args.weather ?? 'kma';
 
 const apiRoot = fileURLToPath(new URL('../api/', import.meta.url));
+const workerModeFile = fileURLToPath(new URL('.fake-worker-mode', import.meta.url));
 const demo = await loadDemoEnv();
 // 백엔드는 날씨 제공자를 "정규화 JSON을 주는 HTTPS 어댑터"로 기대한다(계약 문제 기록 참고).
 // 데모에서는 이 가상 주소로 오는 요청을 아래 KMA 어댑터가 받아 처리한다.
@@ -66,7 +67,12 @@ async function weatherAdapter(url) {
 }
 const request = (input, init) => {
   const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
-  if (url.origin + url.pathname === WEATHER_ADAPTER) return weatherAdapter(url);
+  if (url.origin + url.pathname === WEATHER_ADAPTER) {
+    return weatherAdapter(url).then(async response => {
+      console.log(`  ↳ weather adapter(${weatherMode}) ${response.status} ${(await response.clone().text()).slice(0, 160)}`);
+      return response;
+    });
+  }
   return fetch(input, init).then(async response => {
     // 진단용: Supabase가 실패를 돌려주면 경로·코드·메시지만 로그에 남긴다(토큰·본문 값은 남기지 않음).
     if (!response.ok && response.status !== 404 && response.status !== 416) {
@@ -120,7 +126,16 @@ const server = http.createServer(async (req, res) => {
   res.status = code => { res.statusCode = code; return res; };
   res.json = body => { if (!res.getHeader('content-type')) res.setHeader('content-type', 'application/json; charset=utf-8'); res.end(JSON.stringify(body)); return res; };
   // 데모 제어: 날씨 장애 재현 등(로컬 전용)
-  if (url.pathname === '/__demo/weather') { weatherMode = url.searchParams.get('mode') ?? weatherMode; return res.status(200).json({ weather: weatherMode }); }
+  // 가짜 AI worker 모드(success|partial|fail [items] [labels]) — fake-ai-worker가 이 파일을 매 job마다 읽는다.
+  if (url.pathname === '/__demo/worker-mode') {
+    res.setHeader('Access-Control-Allow-Origin', origins[0]);
+    const mode = url.searchParams.get('mode');
+    if (mode && /^(success|partial|fail)( [1-6])?( [a-z,]+)?$/.test(mode)) fs.writeFileSync(workerModeFile, mode);
+    let current = 'success 3'; try { current = fs.readFileSync(workerModeFile, 'utf8').trim(); } catch { /* 기본값 */ }
+    return res.status(200).json({ mode: current });
+  }
+  if (url.pathname === '/__demo/weather') {
+    res.setHeader('Access-Control-Allow-Origin', origins[0]); weatherMode = url.searchParams.get('mode') ?? weatherMode; return res.status(200).json({ weather: weatherMode }); }
   const route = routes.find(item => item.regex.test(url.pathname));
   if (!route) return res.status(404).json({ error: { code: 'NOT_FOUND' } });
   const match = route.regex.exec(url.pathname);

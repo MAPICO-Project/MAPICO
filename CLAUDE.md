@@ -11,6 +11,7 @@ MAFICO(MyFit:Core 약칭) · 마피코: 보유 의류 등록, 날씨·취향 기
 | `backend/supabase/` | 팀 공용 Supabase DB의 정본(migration·SQL 테스트). 프론트·AI도 같은 DB를 쓰지만 스키마 변경은 여기서만 한다 |
 | `deliverables/visuals/` | 유저플로우·아키텍처·기능맵·ERD 시각자료와 생성기. 최신 도식의 정본 |
 | `deliverables/ai/` | AI 팀 산출물 자리(현재 비어 있음) |
+| `demo-app/` | 유저플로우 시연용 Flutter(Web) 데모 앱. **제품 코드 아님**. 로컬 `backend/tools/dev-server.mjs`에 붙는다(실행: `demo-app/README.md`) |
 | 프론트엔드·AI 코드 폴더 | 각 팀이 이름·구조를 자유롭게 정해 최상위에 추가. 추가하면 이 표에 한 줄 적기 |
 
 ### backend 흐름
