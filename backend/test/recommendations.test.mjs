@@ -68,6 +68,8 @@ test('recommendation accept uses path-bound RPC and returns exact private OOTD',
   const calls = []; const result = await invoke(acceptRecommendation, async (url, options) => { calls.push({ url: String(url), options });
     if (String(url).includes('/auth/v1/user')) return response(200, { id: userId });
     if (String(url).includes('/rpc/accept_my_recommendation')) return response(200, { ootd_id: ootdId, replayed: false });
+    if (String(url).includes('/rpc/get_my_ootd_weather')) return response(200, [{ weather_snapshot_id: snapshotId,
+      valid_at: '2026-10-01T03:00:00+00:00', temperature_c: 4, feels_like_c: 1.5, precipitation_type: 'snow', precipitation_probability: 60 }]);
     if (String(url).includes('/rest/v1/ootd_entries')) return response(200, [{ id: ootdId, worn_on: '2026-10-01', saved_outfit_id: null,
       outfit_id: outfitId, wear_status: 'worn', note: null, rating: null, weather_snapshot_id: snapshotId, version: 1,
       created_at: '2026-10-01T03:06:00.000Z', visibility: 'private', item_snapshot: [
@@ -77,6 +79,9 @@ test('recommendation accept uses path-bound RPC and returns exact private OOTD',
     body: { outfit_id: outfitId, worn_on: '2026-10-01' } });
   assert.equal(result.statusCode, 201); assert.equal(result.body.id, ootdId);
   assert.match(calls[1].url, /\/rpc\/accept_my_recommendation$/);
+  assert.equal(result.body.photo, null);
+  assert.deepEqual(result.body.weather, { weather_code: 'snow', temperature_c: 4, feels_like_c: 1.5, precipitation_type: 'snow',
+    precipitation_probability: 60, valid_at: '2026-10-01T03:00:00+00:00' });
   assert.equal(JSON.parse(calls[1].options.body).p_recommendation_id, recommendationId);
 });
 

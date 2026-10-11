@@ -3,6 +3,7 @@ import { baseHeaders, failure } from './errors.js';
 import { hasOnlyKeys, readJsonObject } from './json-body.js';
 import { authenticatedUser } from './profile.js';
 import { createInternalClient } from './supabase-internal.js';
+import { weatherSummary } from './outfits.js';
 import { currentWeatherSlot, regionCoordinates, resolveWeather, weatherGrid } from './weather.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -196,7 +197,7 @@ export async function createRecommendation(req, dependencies) {
   if (weatherResult.error) return weatherResult.error;
   const garmentsResult = await auth.client.select('garments', [['select', 'id,category'], ['user_id', `eq.${auth.user.id}`],
     ['deleted_at', 'is.null'], ['order', 'id.asc'], ['limit', '100']]);
-  if (garmentsResult.error) return garmentsResult;
+  if (garmentsResult.error) return garmentsResult.error;
   if (!Array.isArray(garmentsResult.data) || garmentsResult.data.some(row => !UUID.test(row.id) || typeof row.category !== 'string')) {
     return failure(500, 'INTERNAL_ERROR', dependencies.requestId);
   }
@@ -266,6 +267,14 @@ export async function acceptRecommendation(req, dependencies) {
   if (!Array.isArray(read.data) || read.data.length !== 1) return failure(500, 'INTERNAL_ERROR', dependencies.requestId);
   const row = read.data[0]; const garmentIds = Array.isArray(row.item_snapshot) ? row.item_snapshot.map(item => item.garment_id) : [];
   const dto = validOotd({ ...row, garment_ids: garmentIds });
-  return dto ? { status: 201, headers: baseHeaders(dependencies.requestId), body: dto }
-    : failure(500, 'INTERNAL_ERROR', dependencies.requestId);
+  if (!dto) return failure(500, 'INTERNAL_ERROR', dependencies.requestId);
+  // Same OOTD shape as GET /ootd: no photo on an accepted recommendation, weather summary when a snapshot exists.
+  let weather = null;
+  if (dto.weather_snapshot_id) {
+    const summary = await auth.client.rpc('get_my_ootd_weather', { p_snapshot_ids: [dto.weather_snapshot_id.toLowerCase()] });
+    if (summary.error) return summary.error;
+    if (!Array.isArray(summary.data)) return failure(500, 'INTERNAL_ERROR', dependencies.requestId);
+    weather = weatherSummary(summary.data[0]);
+  }
+  return { status: 201, headers: baseHeaders(dependencies.requestId), body: { ...dto, photo: null, weather } };
 }

@@ -4269,7 +4269,8 @@
                 }
               }
             },
-            "maxItems": 15
+            "maxItems": 15,
+            "description": "AI가 추정한 옷별 추구미 점수(선택). 배치 확정(confirm) 때 garment_aesthetic_scores로 저장되어 추천 추구미 가중·통계 top_aesthetic·따라입기에 쓰인다. 없으면 점수 없음(중립 0.5)으로 동작. 알 수 없는 aesthetic_id는 저장하지 않는다. (2026-10-11)"
           }
         }
       },
@@ -5270,6 +5271,7 @@
           "note",
           "rating",
           "weather_snapshot_id",
+          "weather",
           "id",
           "version",
           "created_at",
@@ -5356,6 +5358,17 @@
                 "type": "null"
               }
             ]
+          },
+          "weather": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OotdWeatherSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "저장 당시 날씨 요약. weather_snapshot_id가 없거나 스냅샷을 읽을 수 없으면 null. (2026-10-11 추가)"
           },
           "id": {
             "type": "string",
@@ -5832,7 +5845,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "추천 코디 하나의 id(GET /recommendations/{id} 응답 outfits[].id = outfit_recommendations.id). 추천 요청 id(recommendation id)가 아니다. 필드명은 호환을 위해 유지한다."
           }
         }
       },
@@ -5885,7 +5899,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "추천 코디 하나의 id(GET /recommendations/{id} 응답 outfits[].id = outfit_recommendations.id). 추천 요청 id(recommendation id)가 아니다. 필드명은 호환을 위해 유지한다."
           },
           "id": {
             "type": "string",
@@ -5950,7 +5965,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "추천 코디 하나의 id(GET /recommendations/{id} 응답 outfits[].id = outfit_recommendations.id). 추천 요청 id(recommendation id)가 아니다. 필드명은 호환을 위해 유지한다."
           },
           "expected_version": {
             "type": "integer",
@@ -6889,7 +6905,8 @@
           "count",
           "representative_ootd_id",
           "photo",
-          "weather_snapshot_id"
+          "weather_snapshot_id",
+          "weather"
         ],
         "properties": {
           "date": {
@@ -6928,6 +6945,17 @@
               }
             ],
             "description": "대표 기록의 저장 당시 날씨"
+          },
+          "weather": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OotdWeatherSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "저장 당시 날씨 요약. weather_snapshot_id가 없거나 스냅샷을 읽을 수 없으면 null. (2026-10-11 추가)"
           }
         }
       },
@@ -6954,6 +6982,69 @@
               "$ref": "#/components/schemas/OotdCalendarDay"
             },
             "description": "기록이 있는 날짜만, 날짜 DESC"
+          }
+        }
+      },
+      "OotdWeatherSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "기록에 연결된 날씨 스냅샷의 저장 당시 요약(날씨 아이콘용). weather_code는 강수형태 기준 파생값: rain·mixed→rain, snow→snow, none→clear, 그 외 unknown. 하늘상태(구름)는 수집하지 않으므로 clear는 \"강수 없음\"을 뜻한다. 격자 좌표는 내려주지 않는다.",
+        "required": [
+          "weather_code",
+          "temperature_c",
+          "feels_like_c",
+          "precipitation_type",
+          "precipitation_probability",
+          "valid_at"
+        ],
+        "properties": {
+          "weather_code": {
+            "type": "string",
+            "enum": [
+              "clear",
+              "rain",
+              "snow",
+              "unknown"
+            ]
+          },
+          "temperature_c": {
+            "type": "number"
+          },
+          "feels_like_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "precipitation_type": {
+            "type": "string",
+            "enum": [
+              "none",
+              "rain",
+              "snow",
+              "mixed",
+              "unknown"
+            ]
+          },
+          "precipitation_probability": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "valid_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }

@@ -40,6 +40,28 @@ export function upstreamFailure(response, requestId, source) {
 
 const STORAGE_BUCKETS = new Set(['closet-private', 'feed-private', 'profile-media', 'ootd-private']);
 
+// Hosted Storage answers a missing object with 400 + {"error":"NoSuchKey"} (or statusCode "404"), not only 404.
+export async function storageObjectMissing(response) {
+  if (response?.status === 404) return true;
+  if (response?.status !== 400) return false;
+  let payload;
+  try { payload = await response.json(); } catch { return false; }
+  return payload?.error === 'NoSuchKey' || String(payload?.statusCode ?? '') === '404';
+}
+
+// Storage sign responses return `signedURL` relative to the Storage API ("/object/sign/...").
+// Resolve it against <project>/storage/v1 and accept only same-project HTTPS URLs for the expected bucket.
+export function signedStorageUrl(signedURL, base, bucket) {
+  if (typeof signedURL !== 'string' || signedURL.length < 1 || !base || !STORAGE_BUCKETS.has(bucket)) return null;
+  let url;
+  try {
+    url = signedURL.startsWith('/object/') ? new URL(`/storage/v1${signedURL}`, base) : new URL(signedURL, base);
+  } catch { return null; }
+  if (url.protocol !== 'https:' || url.hostname !== base.hostname || url.port || url.username || url.password || url.hash ||
+      !url.pathname.startsWith(`/storage/v1/object/sign/${bucket}/`)) return null;
+  return url;
+}
+
 const VALIDATION_MESSAGES = new Set([
   'empty_profile_patch', 'invalid_display_name', 'invalid_timezone', 'invalid_preferences',
   'invalid_preference_count', 'duplicate_aesthetic', 'invalid_preference_weight_sum',
@@ -189,7 +211,7 @@ export function createUserClient({ env, token, request = fetch, requestId }) {
         'create_my_mimic_job', 'get_my_mimic_job',
         'update_my_profile_with_avatar', 'create_my_ootd_with_photo', 'update_my_ootd_with_photo',
         'create_my_media_upload', 'complete_my_media_upload',
-        'update_my_profile_settings', 'get_my_ootd_calendar'
+        'update_my_profile_settings', 'get_my_ootd_calendar', 'get_my_ootd_weather'
       ].includes(name)) {
         return Promise.resolve({ error: failure(500, 'INTERNAL_ERROR', requestId) });
       }
@@ -265,7 +287,7 @@ export function createUserClient({ env, token, request = fetch, requestId }) {
         response = await request(url, { method: 'GET', headers: { ...headers, Range: `bytes=0-${maxBytes - 1}` },
           redirect: 'error', signal: AbortSignal.timeout(5000) });
       } catch { return { error: failure(503, 'STORAGE_UNAVAILABLE', requestId, true) }; }
-      if (response.status === 404) return { missing: true };
+      if (await storageObjectMissing(response)) return { missing: true };
       if (response.status === 429) return { error: upstreamFailure(response, requestId, 'rest') };
       if (![200, 206].includes(response.status)) return { error: failure(503, 'STORAGE_UNAVAILABLE', requestId, true) };
       const chunks = []; let length = 0;

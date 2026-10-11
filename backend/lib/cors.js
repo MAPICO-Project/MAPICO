@@ -42,7 +42,7 @@ export function preflight(req, env, methods, requestId) {
   };
   if (headers['Access-Control-Allow-Origin']) {
     headers['Access-Control-Allow-Methods'] = methods.join(', ');
-    headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type';
+    headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, Idempotency-Key';
     headers['Access-Control-Max-Age'] = '600';
   }
   return { status: 204, headers };

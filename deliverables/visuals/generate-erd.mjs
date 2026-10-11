@@ -14,7 +14,7 @@ try {
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub', true),'')::uuid$$;
  grant usage on schema public,auth,storage to anon,authenticated,service_role;
  create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
- create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text,owner_id uuid,metadata jsonb default '{}',updated_at timestamptz not null default now());
+ create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text,owner_id text,metadata jsonb default '{}',updated_at timestamptz not null default now());
  alter table storage.objects enable row level security; grant select on storage.objects to authenticated;`);
  const migrations=(await fs.readdir(path.join(backend,'supabase/migrations'))).filter(n=>n.endsWith('.sql')).sort();
  for(const file of migrations)await db.exec((await fs.readFile(path.join(backend,'supabase/migrations',file),'utf8')).replace(/create extension if not exists pgcrypto;/gi,''));

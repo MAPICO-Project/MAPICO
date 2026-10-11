@@ -2,7 +2,7 @@ import { baseHeaders, failure } from './errors.js';
 import { readJsonObject, hasOnlyKeys } from './json-body.js';
 import { authenticatedUser } from './profile.js';
 import { createInternalClient } from './supabase-internal.js';
-import { projectUrl } from './supabase-user.js';
+import { projectUrl, signedStorageUrl } from './supabase-user.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const IDEMPOTENCY = /^[A-Za-z0-9._:-]{8,128}$/;
@@ -25,9 +25,13 @@ function finite(value) {
   if (typeof value !== 'string' || !/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(value)) return null;
   const number = Number(value); return Number.isFinite(number) ? number : null;
 }
+// Keep the DB timestamp text as-is: PostgREST returns microseconds ("...123456+00:00"); toISOString() would
+// truncate to milliseconds and the keyset boundary would repeat or skip rows.
+const TIMESTAMP = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})$/;
+const okTimestamp = value => typeof value === 'string' && TIMESTAMP.test(value) && Number.isFinite(Date.parse(value));
 function cursorPayload(kind, row, filters = {}) {
-  const created = new Date(row.created_at);
-  return Buffer.from(JSON.stringify({ v: 1, kind, at: created.toISOString(), id: (row.post_id ?? row.id).toLowerCase(), ...filters })).toString('base64url');
+  const at = okTimestamp(row.created_at) ? row.created_at : new Date(row.created_at).toISOString();
+  return Buffer.from(JSON.stringify({ v: 1, kind, at, id: (row.post_id ?? row.id).toLowerCase(), ...filters })).toString('base64url');
 }
 function decodeCursor(value, kind, filters) {
   if (typeof value !== 'string' || value.length < 1 || value.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(value)) return null;
@@ -36,7 +40,7 @@ function decodeCursor(value, kind, filters) {
     const expected = new Set(['v', 'kind', 'at', 'id', ...Object.keys(filters)]);
     if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object' || Object.keys(parsed).length !== expected.size ||
         Object.keys(parsed).some(key => !expected.has(key)) || parsed.v !== 1 || parsed.kind !== kind || !UUID.test(parsed.id) ||
-        typeof parsed.at !== 'string' || new Date(parsed.at).toISOString() !== parsed.at ||
+        !okTimestamp(parsed.at) ||
         Object.entries(filters).some(([key, item]) => parsed[key] !== item)) return null;
     return { at: parsed.at, id: parsed.id.toLowerCase() };
   } catch { return null; }
@@ -104,7 +108,7 @@ async function projectAndSign(actorId, postIds, d) {
     const base = projectUrl(d.env); const expiresAt = new Date((d.now ?? (() => new Date()))().getTime() + 300000).toISOString();
     for (const item of result.data) {
       if (!item || item.error || typeof item.path !== 'string' || typeof item.signedURL !== 'string') continue;
-      let url; try { url = new URL(item.signedURL, base); } catch { continue; }
+      const url = signedStorageUrl(item.signedURL, base, 'feed-private'); if (!url) continue;
       const expectedPath = `/storage/v1/object/sign/feed-private/${item.path.split('/').map(encodeURIComponent).join('/')}`;
       if (url.protocol === 'https:' && url.hostname === base.hostname && !url.port && !url.username && !url.password && !url.hash &&
           url.pathname === expectedPath && [...url.searchParams.keys()].length === 1 && url.searchParams.has('token') && url.searchParams.get('token')) {
@@ -150,7 +154,7 @@ async function idsPage(auth, parsed, kind, d) {
 async function listResponse(req, d, kind) {
   const parsed = listParams(req, d.requestId, kind); if (parsed.error) return parsed.error;
   const auth = await authenticatedUser(req, d); if (auth.error) return auth.error;
-  const rows = await idsPage(auth, parsed, kind, d); if (rows.error) return rows;
+  const rows = await idsPage(auth, parsed, kind, d); if (rows.error) return rows.error;
   if (!Array.isArray(rows.data) || rows.data.some(row => !UUID.test(row?.[rows.idField] ?? '') || !Number.isFinite(Date.parse(row.created_at)))) return failure(500, 'INTERNAL_ERROR', d.requestId);
   const rawPage = rows.data.slice(0, parsed.limit); const projected = await projectAndSign(auth.user.id, rawPage.map(row => row[rows.idField]), d);
   if (projected.error) return projected.error;

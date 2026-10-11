@@ -2,7 +2,7 @@ import { baseHeaders, failure, MESSAGES } from './errors.js';
 import { hasOnlyKeys, readJsonObject } from './json-body.js';
 import { readGarmentsByIds } from './garments.js';
 import { authenticatedUser } from './profile.js';
-import { projectUrl } from './supabase-user.js';
+import { projectUrl, signedStorageUrl } from './supabase-user.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIMESTAMP = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})$/;
@@ -89,10 +89,8 @@ async function attachDraftImages(client, drafts, env, requestId, now) {
     const expiresAt = new Date(now().getTime() + 300000).toISOString();
     for (const item of signResult.data) {
       if (!item || item.error || typeof item.path !== 'string' || typeof item.signedURL !== 'string') continue;
-      let url; try { url = new URL(item.signedURL, base); } catch { continue; }
-      if (url.protocol === 'https:' && url.hostname === base.hostname && url.pathname.startsWith('/storage/v1/object/sign/closet-private/')) {
-        signed.set(item.path, { url: String(url), expires_at: expiresAt });
-      }
+      const url = signedStorageUrl(item.signedURL, base, 'closet-private');
+      if (url) signed.set(item.path, { url: String(url), expires_at: expiresAt });
     }
   }
   for (const draft of drafts) { const path = paths.get(draft._asset_id); draft.image = path ? signed.get(path) ?? null : null; delete draft._asset_id; }

@@ -1,7 +1,7 @@
 import { baseHeaders, failure } from './errors.js';
 import { hasOnlyKeys, readJsonObject } from './json-body.js';
 import { authenticatedUser } from './profile.js';
-import { projectUrl } from './supabase-user.js';
+import { projectUrl, signedStorageUrl } from './supabase-user.js';
 
 // Owner-only uploads for the profile image and the selected OOTD photo (media_uploads).
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -49,9 +49,8 @@ export async function signMediaReads(client, bucket, paths, d) {
     for (const item of result.data) {
       if (!item || typeof item !== 'object' || typeof item.path !== 'string' || item.error ||
           typeof item.signedURL !== 'string' || item.signedURL.length < 1) continue;
-      let url;
-      try { url = new URL(item.signedURL, base); } catch { continue; }
-      if (url.protocol !== 'https:' || url.hostname !== base.hostname || !url.pathname.startsWith(`/storage/v1/object/sign/${bucket}/`)) continue;
+      const url = signedStorageUrl(item.signedURL, base, bucket);
+      if (!url) continue;
       signed.set(item.path, { url: String(url), expires_at: expiresAt });
     }
   }

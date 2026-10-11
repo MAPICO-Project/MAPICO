@@ -57,27 +57,124 @@ function canonicalPayload(value) {
   return { temperature_c: temperature, feels_like_c: feels, precipitation_probability: probability,
     precipitation_type: value.precipitation_type, humidity, air_quality: value.air_quality };
 }
+// PostgREST returns timestamptz as "2026-10-11T03:00:00+00:00" while toISOString() gives "...00.000Z":
+// compare instants, never the text.
+export function sameInstant(left, right) {
+  const a = typeof left === 'string' ? Date.parse(left) : NaN; const b = typeof right === 'string' ? Date.parse(right) : NaN;
+  return Number.isFinite(a) && Number.isFinite(b) && a === b;
+}
 function snapshot(row, now, slot, forceStale) {
   const payload = canonicalPayload(row?.payload); const fetched = Date.parse(row?.fetched_at); const issued = Date.parse(row?.issued_at);
   const age = now.getTime() - fetched;
-  if (!row || !UUID.test(row.id) || row.source !== SOURCE || row.valid_at !== slot || !payload ||
+  if (!row || !UUID.test(row.id) || row.source !== SOURCE || !sameInstant(row.valid_at, slot) || !payload ||
       !Number.isInteger(row.grid_x) || !Number.isInteger(row.grid_y) || !Number.isFinite(fetched) || !Number.isFinite(issued) ||
       issued > now.getTime() || age < -60_000 || age > STALE_MS) return null;
   return { id: row.id.toLowerCase(), source: row.source, issued_at: row.issued_at, valid_at: row.valid_at,
     fetched_at: row.fetched_at, grid_x: row.grid_x, grid_y: row.grid_y, ...payload,
     is_stale: forceStale ?? age > FRESH_MS };
 }
+// WEATHER_PROVIDER selects the upstream: "adapter"(default) = HTTPS adapter returning the normalized JSON below,
+// "kma" = 기상청 data.go.kr 단기예보 서비스(초단기실황 + 단기예보 POP) called directly.
+const KMA_DEFAULT_BASE_URL = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0';
 function providerConfig(env) {
-  if (typeof env.WEATHER_PROVIDER_BASE_URL !== 'string' || typeof env.WEATHER_PROVIDER_API_KEY !== 'string' ||
-      env.WEATHER_PROVIDER_API_KEY.length < 8) return null;
+  const kind = env.WEATHER_PROVIDER === undefined || env.WEATHER_PROVIDER === '' ? 'adapter' : env.WEATHER_PROVIDER;
+  if (!['adapter', 'kma'].includes(kind)) return null;
+  if (typeof env.WEATHER_PROVIDER_API_KEY !== 'string' || env.WEATHER_PROVIDER_API_KEY.length < 8) return null;
+  const raw = typeof env.WEATHER_PROVIDER_BASE_URL === 'string' && env.WEATHER_PROVIDER_BASE_URL !== ''
+    ? env.WEATHER_PROVIDER_BASE_URL : kind === 'kma' ? KMA_DEFAULT_BASE_URL : null;
+  if (!raw) return null;
   try {
-    const url = new URL(env.WEATHER_PROVIDER_BASE_URL);
+    const url = new URL(raw);
     if (url.protocol !== 'https:' || url.username || url.password || url.hash) return null;
-    return { url, key: env.WEATHER_PROVIDER_API_KEY };
+    return { kind, url, key: env.WEATHER_PROVIDER_API_KEY };
   } catch { return null; }
 }
+
+// 기상청 Lambert Conformal Conic 격자(5 km) 변환. 기상청 단기예보 OpenAPI 활용가이드의 상수를 그대로 쓴다.
+export function kmaGrid(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const RE = 6371.00877 / 5.0, DEG = Math.PI / 180, slat1 = 30 * DEG, slat2 = 60 * DEG, olon = 126 * DEG, olat = 38 * DEG;
+  let sn = Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+  sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(sn);
+  let sf = Math.tan(Math.PI * 0.25 + slat1 * 0.5); sf = Math.pow(sf, sn) * Math.cos(slat1) / sn;
+  let ro = Math.tan(Math.PI * 0.25 + olat * 0.5); ro = RE * sf / Math.pow(ro, sn);
+  let ra = Math.tan(Math.PI * 0.25 + lat * DEG * 0.5); ra = RE * sf / Math.pow(ra, sn);
+  let theta = lon * DEG - olon; if (theta > Math.PI) theta -= 2 * Math.PI; if (theta < -Math.PI) theta += 2 * Math.PI; theta *= sn;
+  return { nx: Math.floor(ra * Math.sin(theta) + 43 + 0.5), ny: Math.floor(ro - ra * Math.cos(theta) + 136 + 0.5) };
+}
+// PTY(강수형태): 0 없음, 1 비, 2 비/눈, 3 눈, 4 소나기(예보), 5 빗방울, 6 빗방울눈날림, 7 눈날림.
+const KMA_PTY = { 0: 'none', 1: 'rain', 2: 'mixed', 3: 'snow', 4: 'rain', 5: 'rain', 6: 'mixed', 7: 'snow' };
+const KST_MS = 9 * 3600 * 1000;
+function kstParts(ms) {
+  const value = new Date(ms + KST_MS);
+  return { date: value.toISOString().slice(0, 10).replaceAll('-', ''), hour: value.getUTCHours() };
+}
+function kmaBaseInstant(date, hour) {
+  return Date.UTC(Number(date.slice(0, 4)), Number(date.slice(4, 6)) - 1, Number(date.slice(6, 8)), hour) - KST_MS;
+}
+async function kmaItems(config, operation, params, request) {
+  const url = new URL(`${config.url.pathname.replace(/\/$/, '')}/${operation}`, config.url);
+  for (const [name, value] of Object.entries({ serviceKey: config.key, pageNo: '1', dataType: 'JSON', ...params })) {
+    url.searchParams.set(name, value);
+  }
+  let response;
+  try { response = await request(url, { headers: { Accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(4000) }); }
+  catch { return null; }
+  if (response.status !== 200) return null;
+  const length = response.headers?.get?.('content-length'); if (length && Number(length) > 262144) return null;
+  let body; try { body = await response.json(); } catch { return null; } // data.go.kr reports key errors as XML.
+  if (body?.response?.header?.resultCode !== '00') return null;
+  const items = body?.response?.body?.items?.item;
+  return Array.isArray(items) ? items : null;
+}
+// 체감온도: 기온 10°C 이하·풍속 1.3 m/s 이상이면 기상청 겨울철 체감온도식, 아니면 기온 그대로.
+function feelsLike(temperature, windMs) {
+  if (!Number.isFinite(windMs) || temperature > 10 || windMs < 1.3) return temperature;
+  const v = Math.pow(windMs * 3.6, 0.16);
+  return Math.round((13.12 + 0.6215 * temperature - 11.37 * v + 0.3965 * temperature * v) * 10) / 10;
+}
+function forecastBase(now) {
+  // 단기예보: 02·05·08·11·14·17·20·23시(KST) 발표, 발표 후 약 10분 뒤 제공.
+  const clock = kstParts(now.getTime() - 15 * 60 * 1000);
+  const hour = [23, 20, 17, 14, 11, 8, 5, 2].find(value => value <= clock.hour);
+  return hour === undefined ? { date: kstParts(now.getTime() - 15 * 60 * 1000 - 24 * 3600 * 1000).date, hour: 23 } : { date: clock.date, hour };
+}
+async function fetchKma(config, lat, lon, slot, request, now) {
+  const grid = kmaGrid(lat, lon); if (!grid) return null;
+  // 초단기실황: 정시 자료가 40분 무렵 제공되므로 45분을 빼서 확정된 최신 base_time을 쓴다.
+  const base = kstParts(now.getTime() - 45 * 60 * 1000); const fcst = forecastBase(now);
+  const at = { nx: String(grid.nx), ny: String(grid.ny) };
+  const [nowcast, forecast] = await Promise.all([
+    kmaItems(config, 'getUltraSrtNcst', { numOfRows: '20', base_date: base.date, base_time: `${String(base.hour).padStart(2, '0')}00`, ...at }, request),
+    kmaItems(config, 'getVilageFcst', { numOfRows: '400', base_date: fcst.date, base_time: `${String(fcst.hour).padStart(2, '0')}00`, ...at }, request)
+  ]);
+  if (!nowcast) return null;
+  const value = {};
+  for (const item of nowcast) {
+    if (!item || typeof item.category !== 'string') continue;
+    const parsed = Number(item.obsrValue); if (Number.isFinite(parsed)) value[item.category] = parsed;
+  }
+  if (!Number.isFinite(value.T1H)) return null;
+  // POP(강수확률)는 선택: slot 시각(KST) 또는 그 뒤 첫 예보 시각의 값. 단기예보가 실패하면 null.
+  let probability = null;
+  if (forecast) {
+    const target = kstParts(Date.parse(slot)); const key = `${target.date}${String(target.hour).padStart(2, '0')}00`;
+    const pops = forecast.filter(item => item?.category === 'POP' && Number.isFinite(Number(item.fcstValue)))
+      .map(item => ({ at: `${item.fcstDate}${item.fcstTime}`, value: Number(item.fcstValue) }))
+      .filter(item => item.at >= key).sort((left, right) => (left.at < right.at ? -1 : left.at > right.at ? 1 : 0));
+    if (pops.length) probability = pops[0].value;
+  }
+  const payload = canonicalPayload({ temperature_c: value.T1H, feels_like_c: feelsLike(value.T1H, value.WSD),
+    precipitation_probability: probability, precipitation_type: KMA_PTY[value.PTY] ?? 'unknown',
+    humidity: Number.isFinite(value.REH) ? value.REH : null, air_quality: null });
+  const issued = kmaBaseInstant(base.date, base.hour);
+  if (!payload || issued > now.getTime()) return null;
+  return { issued_at: new Date(issued).toISOString(), valid_at: slot, payload };
+}
+
 async function fetchProvider(lat, lon, slot, { env, request }, now) {
   const config = providerConfig(env); if (!config) return null;
+  if (config.kind === 'kma') return fetchKma(config, lat, lon, slot, request, now);
   const url = new URL(config.url); url.searchParams.set('lat', String(lat)); url.searchParams.set('lon', String(lon));
   url.searchParams.set('valid_at', slot);
   let response;

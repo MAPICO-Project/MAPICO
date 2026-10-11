@@ -1,7 +1,7 @@
 import { baseHeaders, failure } from './errors.js';
 import { hasOnlyKeys, readJsonObject } from './json-body.js';
 import { authenticatedUser } from './profile.js';
-import { projectUrl } from './supabase-user.js';
+import { projectUrl, signedStorageUrl } from './supabase-user.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIMESTAMP = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})$/;
@@ -123,9 +123,8 @@ async function loadAssets(client, garments, env, requestId, now) {
     for (const item of result.data) {
       if (!item || typeof item !== 'object' || typeof item.path !== 'string') continue;
       if (item.error || typeof item.signedURL !== 'string' || item.signedURL.length < 1) continue;
-      let url;
-      try { url = new URL(item.signedURL, base); } catch { continue; }
-      if (url.protocol !== 'https:' || url.hostname !== base.hostname || !url.pathname.startsWith('/storage/v1/object/sign/closet-private/')) continue;
+      const url = signedStorageUrl(item.signedURL, base, 'closet-private');
+      if (!url) continue;
       signed.set(item.path, { url: String(url), expires_at: expiresAt });
     }
   }

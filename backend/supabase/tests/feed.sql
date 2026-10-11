@@ -60,9 +60,10 @@ begin
  begin insert into storage.objects(bucket_id,name,owner_id,metadata)
   values('feed-private',auth.uid()::text||'/arbitrary.jpg',auth.uid(),'{"mimetype":"image/jpeg","size":3}');
   raise exception 'FAIL arbitrary feed storage insert'; exception when insufficient_privilege then null; end;
- begin insert into storage.objects(bucket_id,name,owner_id,metadata)
-  values('feed-private',object_name,auth.uid(),'{"mimetype":"image/jpeg","size":"not-a-number"}');
-  raise exception 'FAIL malformed storage metadata'; exception when insufficient_privilege then null; end;
+ -- 2026-10-11 (N3): hosted Storage checks the insert policy without metadata; the policy must allow the pending
+ -- path and leave size/mime to complete_my_feed_media. The probe insert is rolled back by the sub-block.
+ begin insert into storage.objects(bucket_id,name,owner_id,metadata) values('feed-private',object_name,auth.uid()::text,'{}');
+  raise exception 'probe_rollback'; exception when raise_exception then if sqlerrm<>'probe_rollback' then raise; end if; end;
  insert into storage.objects(bucket_id,name,owner_id,metadata)
  values('feed-private',object_name,auth.uid(),'{"mimetype":"image/jpeg","size":3}');
  select id,updated_at into storage_id,storage_updated from storage.objects where bucket_id='feed-private' and name=object_name;

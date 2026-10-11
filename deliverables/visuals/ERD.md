@@ -1,6 +1,6 @@
 # DB 흐름과 상세 ERD
 
-2026-10-10 갱신. 현재 migration 17개를 일회용 PGlite에 적용해 **public 테이블 28개**의 실제 컬럼·PK·FK·UNIQUE를 조회했다. 원격 DB는 접근하지 않았고 Auth/Storage는 로컬 스텁이다.
+2026-10-10 갱신. 현재 migration 18개를 일회용 PGlite에 적용해 **public 테이블 28개**의 실제 컬럼·PK·FK·UNIQUE를 조회했다. 원격 DB는 접근하지 않았고 Auth/Storage는 로컬 스텁이다.
 
 도메인 요약도의 화살표는 업무 흐름이며 FK가 아니다. 상세 ERD는 실제 FK만 표시하며, 읽기 쉽게 PK·FK와 주요 업무 필드만 보여준다. 겹치는 테이블은 같은 테이블의 재표시다. 전체 컬럼·제약은 [migration](../../backend/supabase/migrations/)과 [DB 설계](../../backend/docs/DB_DESIGN.md)가 기준이다.
 

@@ -169,9 +169,10 @@ begin
  begin insert into storage.objects(bucket_id,name,owner_id,metadata)
   values('profile-media',photo_key,auth.uid(),'{"mimetype":"image/jpeg","size":3}');
   raise exception 'FAIL cross-bucket storage insert'; exception when insufficient_privilege then null; end;
- begin insert into storage.objects(bucket_id,name,owner_id,metadata)
-  values('ootd-private',photo_key,auth.uid(),'{"mimetype":"image/png","size":3}');
-  raise exception 'FAIL mismatched mimetype insert'; exception when insufficient_privilege then null; end;
+ -- 2026-10-11 (N3): the policy ignores metadata (hosted checks it without metadata); mime/size are verified by
+ -- complete_my_media_upload. Probe insert without metadata, rolled back by the sub-block.
+ begin insert into storage.objects(bucket_id,name,owner_id,metadata) values('ootd-private',photo_key,auth.uid()::text,'{}');
+  raise exception 'probe_rollback'; exception when raise_exception then if sqlerrm<>'probe_rollback' then raise; end if; end;
 
  begin perform public.complete_my_media_upload((photo->>'upload_id')::uuid,'valid');
   raise exception 'FAIL complete before upload'; exception when raise_exception then if sqlerrm<>'upload_not_found' then raise; end if; end;

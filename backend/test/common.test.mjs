@@ -70,7 +70,7 @@ test('allowed preflight is unauthenticated, bodyless and never reaches upstream'
   assert.equal(result.headers['X-Request-Id'], requestId);
   assert.equal(result.headers['Access-Control-Allow-Origin'], allowed);
   assert.equal(result.headers['Access-Control-Allow-Methods'], 'GET, HEAD, PATCH, DELETE');
-  assert.equal(result.headers['Access-Control-Allow-Headers'], 'Authorization, Content-Type');
+  assert.equal(result.headers['Access-Control-Allow-Headers'], 'Authorization, Content-Type, Idempotency-Key');
   assert.match(result.headers.Vary, /Access-Control-Request-Headers/);
 });
 

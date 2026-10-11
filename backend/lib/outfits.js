@@ -122,6 +122,30 @@ async function projectSaved(client, userId, rows, requestId) {
   return { data: projected };
 }
 
+// #8 저장 당시 날씨 요약(아이콘용). weather_code는 강수형태 기준(rain/mixed→rain, snow→snow, none→clear,
+// 그 외 unknown)이며 하늘상태(구름)는 수집하지 않는다. 스냅샷이 없거나 읽을 수 없으면 null.
+const PRECIPITATION_CODE = { rain: 'rain', mixed: 'rain', snow: 'snow', none: 'clear' };
+const nullableNumber = value => value === null || value === undefined ? null : Number.isFinite(value) ? value : undefined;
+export function weatherSummary(row) {
+  if (!row || !UUID.test(row.weather_snapshot_id ?? '') || !Number.isFinite(row.temperature_c) ||
+      typeof row.precipitation_type !== 'string' || !Number.isFinite(Date.parse(row.valid_at))) return null;
+  const feels = nullableNumber(row.feels_like_c); const probability = nullableNumber(row.precipitation_probability);
+  if (feels === undefined || probability === undefined) return null;
+  return { weather_code: PRECIPITATION_CODE[row.precipitation_type] ?? 'unknown', temperature_c: row.temperature_c,
+    feels_like_c: feels, precipitation_type: row.precipitation_type, precipitation_probability: probability, valid_at: row.valid_at };
+}
+async function readWeatherSummaries(client, snapshotIds, requestId) {
+  const unique = [...new Set(snapshotIds.filter(id => typeof id === 'string' && UUID.test(id)).map(id => id.toLowerCase()))];
+  if (!unique.length) return { data: new Map() };
+  const result = await client.rpc('get_my_ootd_weather', { p_snapshot_ids: unique });
+  if (result.error) return result;
+  if (!Array.isArray(result.data)) return { error: failure(500, 'INTERNAL_ERROR', requestId) };
+  const map = new Map();
+  for (const row of result.data) { const summary = weatherSummary(row); if (summary) map.set(row.weather_snapshot_id.toLowerCase(), summary); }
+  return { data: map };
+}
+const weatherOf = (map, id) => (id ? map.get(id.toLowerCase()) ?? null : null);
+
 async function projectOotd(client, userId, rows, d) {
   const { requestId } = d;
   if (!Array.isArray(rows)) return { error: failure(500, 'INTERNAL_ERROR', requestId) };
@@ -145,9 +169,11 @@ async function projectOotd(client, userId, rows, d) {
   if (active.error) return active;
   const photos = await signMediaReads(client, 'ootd-private', rows.map(row => row.photo_object_key), d);
   if (photos.error) return photos;
+  const weather = await readWeatherSummaries(client, rows.map(row => row.weather_snapshot_id), requestId);
+  if (weather.error) return weather;
   return { data: rows.map((row, index) => ({ worn_on: row.worn_on, garment_ids: snapshots[index].map(item => item.garment_id),
     saved_outfit_id: row.saved_outfit_id, outfit_id: row.outfit_id, wear_status: row.wear_status, note: row.note, rating: row.rating,
-    weather_snapshot_id: row.weather_snapshot_id, photo: row.photo_object_key ? photos.data.get(row.photo_object_key) ?? null : null,
+    weather_snapshot_id: row.weather_snapshot_id, weather: weatherOf(weather.data, row.weather_snapshot_id), photo: row.photo_object_key ? photos.data.get(row.photo_object_key) ?? null : null,
     id: row.id, version: row.version, created_at: row.created_at, visibility: 'private',
     item_snapshot: snapshots[index].map(item => ({ ...item, unavailable: !active.data.has(item.garment_id.toLowerCase()) })) })) };
 }
@@ -313,10 +339,13 @@ export async function ootdCalendarResponse(req, d) {
   }
   const photos = await signMediaReads(auth.client, 'ootd-private', [...keys.values()], d);
   if (photos.error) return photos.error;
+  const weather = await readWeatherSummaries(auth.client, result.data.map(day => day.weather_snapshot_id), d.requestId);
+  if (weather.error) return weather.error;
   return { status: 200, headers: baseHeaders(d.requestId), body: { from, to, days: result.data.map(day => {
     const key = keys.get(day.representative_ootd_id.toLowerCase());
     return { date: day.date, count: day.count, representative_ootd_id: day.representative_ootd_id,
-      photo: key ? photos.data.get(key) ?? null : null, weather_snapshot_id: day.weather_snapshot_id };
+      photo: key ? photos.data.get(key) ?? null : null, weather_snapshot_id: day.weather_snapshot_id,
+      weather: weatherOf(weather.data, day.weather_snapshot_id) };
   }) } };
 }
 

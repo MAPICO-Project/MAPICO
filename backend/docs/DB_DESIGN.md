@@ -19,7 +19,7 @@
 | analysis_jobs | 분석 상태·재시도·lease | 본인 제한 필드/서버 |
 | garment_drafts | AI 원본 예측 + 사용자 수정값 + version | 본인 |
 | garments | 확정 의류, category, 선택 memo(1,000자), 내부 속성 | 본인 |
-| garment_aesthetic_scores | 모델 버전별 추구미 점수 | 본인 |
+| garment_aesthetic_scores | 모델 버전별 추구미 점수. 배치 확정 시 draft `raw_prediction.aesthetic_scores`에서 저장(2026-10-11) | 본인 |
 | weather_snapshots | 발표·유효·수집 시간, 격자, 공급자, payload | 서버 |
 | recommendation_requests | 사용자·대상 날짜·날씨·조건·상태, selected_aesthetic_id?(홈 Chip 선택, FK aesthetics) | 본인 |
 | outfit_recommendations | AI 추천 순위·설명·근거 | 본인 |
@@ -56,7 +56,8 @@
 - 1~3 추구미/대표 순위/무드보드 점수 산정은 아직 DB 자동 계산 안 함. seed 명칭은 이전 임시 카탈로그이며 최종 명칭은 미정; 학습 정의·벡터 차원도 미확정.
 - TPO 칩 제거를 TPO 내부 데이터 삭제로 단정하지 않으며 자동 기본값 적용은 별도 결정.
 - 피드 최초 스키마는 추구미 1개 태그. 여러 개 선택 확정 시 연결 테이블 필요.
-- OOTD 과거/미래 날짜에 오늘 날씨를 붙이지 않는다. 서버가 대상 시점의 snapshot을 선택하며 미확보는 null. 내부 weather_snapshot_id는 외부 응답에서 안전한 요약으로 변환한다.
+- OOTD 과거/미래 날짜에 오늘 날씨를 붙이지 않는다. 서버가 대상 시점의 snapshot을 선택하며 미확보는 null. 내부 weather_snapshot_id는 외부 응답에서 안전한 요약으로 변환한다. 요약은 `get_my_ootd_weather`(본인 OOTD가 참조하는 스냅샷만, 격자 좌표 제외)로 읽는다.
+- (2026-10-11) hosted `storage.objects.owner_id`는 text다. 비교는 항상 `::text`로 한다. AI worker가 secret key로 올린 cutout은 owner가 NULL이며, 펜스는 `closet-private`의 `<user_id>/<batch_id>/cutouts/` 경로(사용자 역할은 쓸 수 없음)와 job 소유·lease로 확인하고 owner가 있으면 job 사용자와 일치해야 한다. Storage insert 정책은 metadata(size·mimetype) 없이 평가되므로 경로·대기 행만 보고, 크기·MIME은 complete RPC가 검증한다.
 
 ## 권한·트랜잭션
 

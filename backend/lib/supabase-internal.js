@@ -1,5 +1,5 @@
 import { failure } from './errors.js';
-import { projectUrl } from './supabase-user.js';
+import { projectUrl, storageObjectMissing } from './supabase-user.js';
 
 function headers(env) {
   const secret = env.SUPABASE_SECRET_KEY;
@@ -154,7 +154,7 @@ export function createInternalClient({ env, request = fetch, requestId }) {
       const url = new URL(`/storage/v1/object/authenticated/${encoded}`, base);
       const response = await call(url, { method: 'GET', headers: { ...internalHeaders, Range: `bytes=0-${maxBytes - 1}` } });
       if (!response) return { error: failure(503, 'STORAGE_UNAVAILABLE', requestId, true) };
-      if (response.status === 404) return { missing: true };
+      if (await storageObjectMissing(response)) return { missing: true };
       if (![200, 206].includes(response.status)) return { error: failure(503, 'STORAGE_UNAVAILABLE', requestId, true) };
       const chunks = []; let length = 0;
       try {

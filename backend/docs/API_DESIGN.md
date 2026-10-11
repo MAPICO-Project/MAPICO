@@ -92,6 +92,8 @@ G5 날씨·추천은 한국 지원영역의 시간당 current slot, 10분 fresh/
 
 날씨는 임의 JSON을 받지 않는다. `weather_snapshot_id`의 날짜·지역을 서버가 검증한다. 과거 날씨 데이터가 없거나 미래 예보 범위를 벗어나면 null로 남기고 오늘 날씨를 대입하지 않는다. 현재 상세 위치를 공유 피드에 노출하지 않는다.
 
+(2026-10-11) OOTD 목록·상세·캘린더·추천 채택 응답은 `weather`(저장 당시 날씨 요약: `weather_code`·`temperature_c`·`feels_like_c`·`precipitation_type`·`precipitation_probability`·`valid_at`, 없으면 null)를 함께 준다. `weather_code`는 강수형태에서 파생(rain·mixed→rain, snow→snow, none→clear, 그 외 unknown)하며 하늘상태는 수집하지 않는다. 날씨 제공자는 서버 환경변수 `WEATHER_PROVIDER`로 고른다: `adapter`(기본, 정규화 JSON HTTPS 어댑터) 또는 `kma`(기상청 data.go.kr 초단기실황 + 단기예보 POP 직접 호출, `WEATHER_PROVIDER_API_KEY`=serviceKey, `WEATHER_PROVIDER_BASE_URL` 생략 시 `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0`).
+
 ## 피드와 개인정보 경계
 
 1. 사용자가 OOTD 또는 갤러리에서 공유 게시물 초안을 만든다. 본인 옷장 아이템 1~10개를 `garment_ids`로 연결해야 하며(`source_ootd_id`만 주면 그 OOTD의 쓸 수 있는 옷을 자동 연결, 없으면 409) 0개·중복·11개 이상은 422, 남의 옷은 404 `GARMENT_NOT_FOUND`, 삭제·미검증 옷은 409다. `FeedPostCreate.visibility`는 private만 허용한다. 연결 없는 구 포스트는 숨김·삭제는 되나 다시 공개할 수 없다(409 `FEED_CONFLICT`). 미디어 검증 후 별도 PATCH로 공개한다.
