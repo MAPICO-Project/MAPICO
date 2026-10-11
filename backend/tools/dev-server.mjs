@@ -151,7 +151,11 @@ const server = http.createServer(async (req, res) => {
     await handler(req, res);
   } catch (error) {
     console.error('handler error', route.file, error?.message);
-    if (!res.headersSent) res.status(500).json({ error: { code: 'DEV_SERVER_ERROR' } });
+    // 핸들러가 던지면 CORS 헤더 없이 끝나 브라우저에는 네트워크 오류로 보인다 → 허용 origin이면 붙여서 오류 봉투를 보여 준다.
+    if (!res.headersSent) {
+      if (origins.includes(req.headers.origin)) res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+      res.status(500).json({ error: { code: 'DEV_SERVER_ERROR', message: `백엔드 핸들러 오류: ${error?.message ?? ''}`.slice(0, 200), retryable: false } });
+    }
   } finally {
     console.log(`${req.method} ${url.pathname} → ${res.statusCode} (${Date.now() - started}ms)`);
   }
