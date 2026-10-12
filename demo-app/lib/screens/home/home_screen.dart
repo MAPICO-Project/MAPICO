@@ -54,8 +54,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _locate() async {
     setState(() => _locating = true);
     try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+      // 브라우저 권한 팝업에 답이 없으면 요청이 끝나지 않으므로 시간 제한을 둔다(초과 = 거절로 처리).
+      var permission = await Geolocator.checkPermission().timeout(const Duration(seconds: 5));
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission().timeout(const Duration(seconds: 8));
+      }
       if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
         throw Exception('denied');
       }
@@ -223,7 +226,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   _locate();
                   return;
                 }
-                setState(() => _regionMode = on);
+                setState(() {
+                  _regionMode = on;
+                  _locating = false; // 위치 확인을 기다리지 않고 지역으로 바로 조회
+                });
                 _loadWeather();
                 _loadRecommendations();
               },

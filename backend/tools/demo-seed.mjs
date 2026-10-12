@@ -79,8 +79,15 @@ async function registerCloset(call, items) {
   await putSigned(created.upload, file);
   await call('POST', `/garment-batches/${created.batch.id}/complete-upload`, undefined, { idem: true });
   const job = await call('POST', `/garment-batches/${created.batch.id}/analysis-jobs`, undefined, { idem: true, expect: 202 });
-  runWorker(items.map(([k]) => k));
-  const after = await call('GET', `/analysis-jobs/${job.id}`);
+  // 상주 worker(--watch)가 있으면 그쪽이 처리한다. 5초 안에 시작되지 않으면 한 번 실행용 worker를 직접 돌린다.
+  fs.writeFileSync(path.join(tools, '.fake-worker-mode'), `success ${items.length} ${items.map(([k]) => k).join(',')}`);
+  let after = job;
+  for (let i = 0; i < 40 && ['queued', 'running'].includes(after.status); i++) {
+    if (i === 10 && after.status === 'queued') runWorker(items.map(([k]) => k));
+    await new Promise(r => setTimeout(r, 500));
+    after = await call('GET', `/analysis-jobs/${job.id}`);
+  }
+  fs.rmSync(path.join(tools, '.fake-worker-mode'), { force: true });
   if (!['succeeded', 'partial_failed'].includes(after.status)) throw Error(`analysis ended ${after.status}`);
   const drafts = (await call('GET', `/garment-batches/${created.batch.id}/drafts`)).items;
   const confirmed = await call('POST', `/garment-batches/${created.batch.id}/confirm`, {
