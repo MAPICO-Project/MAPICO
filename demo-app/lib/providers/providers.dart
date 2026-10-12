@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/api.dart';
@@ -12,7 +14,10 @@ final aestheticsProvider = FutureProvider<List<Json>>((ref) async {
 });
 
 /// GET /garments — 활성 의류 전체(데모는 페이지를 끝까지 읽는다).
+/// 이미지 signed URL이 5분 뒤 만료되므로 4분마다 다시 읽는다(만료된 URL로 그리면 빈 칸이 된다).
 final garmentsProvider = FutureProvider<List<Json>>((ref) async {
+  final timer = Timer(const Duration(minutes: 4), ref.invalidateSelf);
+  ref.onDispose(timer.cancel);
   final items = <Json>[];
   String? cursor;
   do {

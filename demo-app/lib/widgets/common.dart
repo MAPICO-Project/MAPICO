@@ -75,6 +75,7 @@ class AsyncBody<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => value.when(
+        skipLoadingOnReload: true, // 주기적 재조회(서명 URL 갱신) 중에는 이전 화면을 유지
         data: builder,
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ErrorPanel(e, onRetry: onRetry),
@@ -116,6 +117,7 @@ class GarmentThumb extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final g = ref.watch(garmentByIdProvider)[garmentId];
+    final loading = ref.watch(garmentsProvider).isLoading; // 로딩 중을 "삭제됨"으로 오해하지 않게
     return SizedBox(
       width: size,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -124,7 +126,7 @@ class GarmentThumb extends ConsumerWidget {
           child: SizedBox(width: size, height: size, child: NetImage(g?['image'])),
         ),
         if (showLabel)
-          Text(g == null ? '삭제됨' : categoryLabel((g['attributes'] as Map)['category'] as String?),
+          Text(g == null ? (loading ? '불러오는 중' : '삭제됨') : categoryLabel((g['attributes'] as Map)['category'] as String?),
               style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis),
       ]),
     );
